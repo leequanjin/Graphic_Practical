@@ -61,13 +61,17 @@ bool initPixelFormat(HDC hdc)
 
 void display()
 {
-	//--------------------------------
-	//	OpenGL drawing
-	//--------------------------------
+	glClearColor(1.0, 0.0, 0.0, 0.0); // Set the clear color to red
+	glClear(GL_COLOR_BUFFER_BIT); // Clear the color buffer
 
-	//--------------------------------
-	//	End of OpenGL drawing
-	//--------------------------------
+	glBegin(GL_TRIANGLES); // Draw a triangle with vertices P1, P2, P3
+		glVertex2f(-0.5, 0.0); // P1 vertex
+		glColor3f(1.0, 0.0, 0.0); // Red vertex
+		glVertex2f(0.0, 0.5); // P2 vertex
+		glColor3f(0.0, 1.0, 0.0); // Green vertex
+		glVertex2f(0.5, 0.0); // P3 vertex
+		glColor3f(0.0, 0.0, 1.0); // Blue vertex
+	glEnd();
 }
 //--------------------------------------------------------------------
 
@@ -85,7 +89,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow)
 	if (!RegisterClassEx(&wc)) return false;
 
 	HWND hWnd = CreateWindow(WINDOW_TITLE, WINDOW_TITLE, WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+		950, 10, 300, 300,
 		NULL, NULL, wc.hInstance, NULL);
 
 	//--------------------------------
