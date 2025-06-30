@@ -4,8 +4,9 @@
 
 #pragma comment (lib, "OpenGL32.lib")
 
-#define WINDOW_TITLE "OpenGL Window"
+#define WINDOW_TITLE "Practical Excercise 1"
 
+int qNo = 0; // Question number
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -16,9 +17,23 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		break;
 
 	case WM_KEYDOWN:
-		if (wParam == VK_ESCAPE) PostQuitMessage(0);
+		if (wParam == VK_ESCAPE) {
+			PostQuitMessage(0);
+		} else if (wParam == '0') {
+			qNo = 0;
+		} else if (wParam == '1') {
+			qNo = 1;
+		} else if (wParam == '2') {
+			qNo = 2;
+		} else if (wParam == '3') {
+			qNo = 3;
+		} else if (wParam == '4') {
+			qNo = 4;
+		} else if (wParam == '5') {
+			qNo = 5;
+		}
 		break;
-
+	
 	default:
 		break;
 	}
@@ -59,19 +74,147 @@ bool initPixelFormat(HDC hdc)
 }
 //--------------------------------------------------------------------
 
-void display()
-{
-	glClearColor(1.0, 0.0, 0.0, 0.0); // Set the clear color to red
+void demo() {
+	glClearColor(0.0, 0.0, 0.0, 0.0); // Set the clear color to red
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color buffer
 
-	glBegin(GL_TRIANGLES); // Draw a triangle with vertices P1, P2, P3
-		glVertex2f(-0.5, 0.0); // P1 vertex
-		glColor3f(1.0, 0.0, 0.0); // Red vertex
-		glVertex2f(0.0, 0.5); // P2 vertex
-		glColor3f(0.0, 1.0, 0.0); // Green vertex
-		glVertex2f(0.5, 0.0); // P3 vertex
-		glColor3f(0.0, 0.0, 1.0); // Blue vertex
+	glLineWidth(5.0f); // Set the line width
+	glPointSize(10.0f); // Set the point size
+	glBegin(GL_POLYGON); // Start drawing a line loop
+	glVertex2f(-0.5, 0.0); // P1 vertex
+	glColor3f(1.0, 0.0, 0.0); // Red vertex
+	glVertex2f(0.0, 0.5); // P2 vertex
+	glColor3f(0.0, 1.0, 0.0); // Green vertex
+	glVertex2f(0.5, 0.0); // P3 vertex
+	glColor3f(0.0, 0.0, 1.0); // Blue vertex
 	glEnd();
+}
+
+void pahangFlag() {
+	glClearColor(1.0, 0.0, 0.0, 0.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glBegin(GL_QUADS);
+	glColor3f(1.0, 1.0, 1.0); // White
+	glVertex2f(-0.8, 0.0);
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.8, 0.5);
+	glVertex2f(0.8, 0.0);
+	glEnd();
+
+	glBegin(GL_QUADS);
+	glColor3f(0.0, 0.0, 0.0); // Black
+	glVertex2f(-0.8, -0.5);
+	glVertex2f(-0.8, 0.0);
+	glVertex2f(0.8, 0.0);
+	glVertex2f(0.8, -0.5);
+	glEnd();
+}
+
+void negeriSembilanFlag() {
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glBegin(GL_QUADS);
+	glColor3f(1.0, 1.0, 0.0); // Yellow
+	glVertex2f(-0.8, -0.5);
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.8, 0.5);
+	glVertex2f(0.8, -0.5);
+	glEnd();
+
+	glBegin(GL_TRIANGLES);
+	glColor3f(0.0, 0.0, 0.0); // Black
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(-0.8, 0.0);
+	glVertex2f(0.0, 0.0);
+	glEnd();
+
+	glEnd();
+	glBegin(GL_TRIANGLES);
+	glColor3f(1.0, 0.0, 0.0); // Red
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.0, 0.0);
+	glEnd();
+}
+
+void englandFlag() {
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glBegin(GL_QUADS);
+	glColor3f(1.0, 1.0, 1.0);
+	glVertex2f(-0.8, -0.5);
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.8, 0.5);
+	glVertex2f(0.8, -0.5);
+	glEnd();
+
+	glLineWidth(20.0f);
+	glBegin(GL_LINES);
+	glColor3f(1.0, 0.0, 0.0);
+	glVertex2f(-0.8, 0.0);
+	glVertex2f(0.8, 0.0);
+	glEnd();
+
+	glLineWidth(20.0f);
+	glBegin(GL_LINES);
+	glColor3f(1.0, 0.0, 0.0);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.0, -0.5);
+	glEnd();
+}
+
+void scotlandFlag() {
+	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glBegin(GL_QUADS);
+	glColor3f(1.0, 1.0, 1.0);
+	glVertex2f(-0.8, -0.5);
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.8, 0.5);
+	glVertex2f(0.8, -0.5);
+	glEnd();
+
+	glLineWidth(20.0f);
+	glBegin(GL_LINES);
+	glColor3f(1.0, 0.0, 0.0);
+	glVertex2f(-0.8, 0.0);
+	glVertex2f(0.8, 0.0);
+	glEnd();
+}
+
+void japanFlag() {
+
+}
+
+void display()
+{
+	switch (qNo)
+	{
+		case 0:
+			demo();
+			break;
+		case 1:
+			pahangFlag();
+			break;
+		case 2:
+			negeriSembilanFlag();
+			break;
+		case 3:
+			englandFlag();
+			break;
+		case 4:
+			scotlandFlag();
+			break;
+		case 5:
+			japanFlag();
+			break;
+	default:
+		break;
+	}
 }
 //--------------------------------------------------------------------
 
