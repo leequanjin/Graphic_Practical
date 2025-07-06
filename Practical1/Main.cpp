@@ -4,7 +4,7 @@
 
 #pragma comment (lib, "OpenGL32.lib")
 
-#define WINDOW_TITLE "Practical Excercise 1"
+#define WINDOW_TITLE "Tung Tung Tung"
 
 int qNo = 0; // Question number
 
@@ -75,27 +75,37 @@ bool initPixelFormat(HDC hdc)
 //--------------------------------------------------------------------
 
 void demo() {
-	glClearColor(0.0, 0.0, 0.0, 0.0); // Set the clear color to red
+	glClearColor(0.0, 0.0, 0.0, 0.0); 
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color buffer
 
 	glLineWidth(5.0f); // Set the line width
 	glPointSize(10.0f); // Set the point size
+
 	glBegin(GL_POLYGON); // Start drawing a line loop
-	glVertex2f(-0.5, 0.0); // P1 vertex
-	glColor3f(1.0, 0.0, 0.0); // Red vertex
-	glVertex2f(0.0, 0.5); // P2 vertex
-	glColor3f(0.0, 1.0, 0.0); // Green vertex
-	glVertex2f(0.5, 0.0); // P3 vertex
-	glColor3f(0.0, 0.0, 1.0); // Blue vertex
+		glVertex2f(-0.5, 0.0); // P1 vertex
+		glColor3f(1.0, 0.0, 0.0); // Red vertex
+		glVertex2f(0.0, 0.5); // P2 vertex
+		glColor3f(0.0, 1.0, 0.0); // Green vertex
+		glVertex2f(0.5, 0.0); // P3 vertex
+		glColor3f(0.0, 0.0, 1.0); // Blue vertex
 	glEnd();
 }
 
 void pahangFlag() {
-	glClearColor(1.0, 0.0, 0.0, 0.0);
+	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 
+	glLineWidth(2.0);
+	glBegin(GL_LINE_LOOP);
+	glColor3f(0, 0, 1.0);
+	glVertex2f(-0.8, -0.5);
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.8, 0.5);
+	glVertex2f(0.8, -0.5);
+	glEnd();
+
 	glBegin(GL_QUADS);
-	glColor3f(1.0, 1.0, 1.0); // White
+	glColor3f(1.0, 1.0, 1.0);
 	glVertex2f(-0.8, 0.0);
 	glVertex2f(-0.8, 0.5);
 	glVertex2f(0.8, 0.5);
@@ -103,7 +113,7 @@ void pahangFlag() {
 	glEnd();
 
 	glBegin(GL_QUADS);
-	glColor3f(0.0, 0.0, 0.0); // Black
+	glColor3f(0.0, 0.0, 0.0);
 	glVertex2f(-0.8, -0.5);
 	glVertex2f(-0.8, 0.0);
 	glVertex2f(0.8, 0.0);
@@ -167,8 +177,17 @@ void englandFlag() {
 }
 
 void scotlandFlag() {
-	glClearColor(0.0, 0.0, 0.0, 0.0);
+	glClearColor(1.0, 1.0, 1.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
+
+	glLineWidth(2.0);
+	glBegin(GL_LINE_LOOP);
+	glColor3f(0, 0, 1.0);
+	glVertex2f(-0.8, -0.5);
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.8, 0.5);
+	glVertex2f(0.8, -0.5);
+	glEnd();
 
 	glBegin(GL_QUADS);
 	glColor3f(1.0, 1.0, 1.0);
@@ -178,11 +197,32 @@ void scotlandFlag() {
 	glVertex2f(0.8, -0.5);
 	glEnd();
 
-	glLineWidth(20.0f);
-	glBegin(GL_LINES);
-	glColor3f(1.0, 0.0, 0.0);
-	glVertex2f(-0.8, 0.0);
-	glVertex2f(0.8, 0.0);
+	glBegin(GL_TRIANGLES);
+	glColor3f(0, 0, 1.0);
+	glVertex2f(-0.7, 0.5);
+	glVertex2f(0.7, 0.5);
+	glVertex2f(0.0, 0.1);
+	glEnd();
+
+	glBegin(GL_TRIANGLES);
+	glColor3f(0, 0, 1.0);
+	glVertex2f(0.8, 0.4);
+	glVertex2f(0.8, -0.4);
+	glVertex2f(0.1, 0.0);
+	glEnd();
+
+	glBegin(GL_TRIANGLES);
+	glColor3f(0, 0, 1.0);
+	glVertex2f(-0.7, -0.5);
+	glVertex2f(0.7, -0.5);
+	glVertex2f(0.0, -0.1);
+	glEnd();
+
+	glBegin(GL_TRIANGLES);
+	glColor3f(0, 0, 1.0);
+	glVertex2f(-0.8, 0.4);
+	glVertex2f(-0.8, -0.4);
+	glVertex2f(-0.1, 0.0);
 	glEnd();
 }
 
