@@ -1,12 +1,20 @@
 
 #include <Windows.h>
 #include <gl/GL.h>
+#include <math.h>
 
 #pragma comment (lib, "OpenGL32.lib")
 
 #define WINDOW_TITLE "Tung Tung Tung"
 
 int qNo = 0; // Question number
+float x = 0, y = 0; // Circle origin coordinates
+float radius = 0.3; // Circle radius
+float angle = 0;
+float x2 = 0, y2 = 0; // Circle point coordinates
+float PI = 3.14159265358979323846f;	// Pi constant
+int noOfTri = 30; // Number of triangles to draw the circle
+
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -31,6 +39,8 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			qNo = 4;
 		} else if (wParam == '5') {
 			qNo = 5;
+		} else if (wParam == '6') {
+			qNo = 6;
 		}
 		break;
 	
@@ -227,7 +237,84 @@ void scotlandFlag() {
 }
 
 void japanFlag() {
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
 
+	glLineWidth(2.0);
+	glBegin(GL_LINE_LOOP);
+	glColor3f(0, 0, 0);
+	glVertex2f(-0.8, -0.5);
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.8, 0.5);
+	glVertex2f(0.8, -0.5);
+	glEnd();
+
+	glBegin(GL_QUADS);
+	glColor3f(1.0, 1.0, 1.0);
+	glVertex2f(-0.8, -0.5);
+	glVertex2f(-0.8, 0.5);
+	glVertex2f(0.8, 0.5);
+	glVertex2f(0.8, -0.5);
+	glEnd();
+
+	glBegin(GL_TRIANGLE_FAN);
+	glColor3f(1, 0, 0);
+	glVertex2f(x, y); // Center of the circle
+	for (angle = 0;  angle < 2 * PI; angle += (2 * PI) / noOfTri) {
+		x2 = x + radius * cos(angle);
+		y2 = y + radius * sin(angle);
+		glVertex2f(x2, y2); // Calculate the circle point coordinates
+	}
+	glEnd();
+}
+
+void challenge() {
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glBegin(GL_QUADS);
+	glColor3f(0.0, 0.0, 0.0);
+	glVertex2f(0.68, -0.1);
+	glVertex2f(0.68, 0.7);
+	glVertex2f(0.55, 0.7);
+	glVertex2f(0.55, -0.1);
+	glEnd();
+	
+	glBegin(GL_TRIANGLE_FAN);
+	glColor3f(1, 1, 0);
+	glVertex2f(x, y);
+	for (angle = 0; angle < 2 * PI; angle += (2 * PI) / noOfTri) {
+		x2 = x + 0.7 * cos(angle);
+		y2 = y + 0.7 * sin(angle);
+		glVertex2f(x2, y2);
+	}
+	glEnd();
+
+	glBegin(GL_QUADS);
+	glColor3f(0.0, 0.0, 0.0);
+	glVertex2f(-0.8, -0.1);
+	glVertex2f(-0.8, 0.7);
+	glVertex2f(-0.55, 0.7);
+	glVertex2f(-0.55, -0.1);
+	glEnd();
+
+	glBegin(GL_QUADS);
+	glColor3f(0.0, 0.0, 0.0);
+	glVertex2f(-0.6, 0.4);
+	glVertex2f(-0.6, 0.8);
+	glVertex2f(0.8, 0.8);
+	glVertex2f(0.8, 0.4);
+	glEnd();
+
+	glBegin(GL_LINE_LOOP);
+	glColor3f(0, 0, 0);
+	glVertex2f(x, y);
+	for (angle = 0; angle < 2 * PI; angle += (2 * PI) / noOfTri) {
+		x2 = x + 0.1 * cos(angle);
+		y2 = y + 0.1 * sin(angle);
+		glVertex2f(x2, y2);
+	}
+	glEnd();
 }
 
 void display()
@@ -251,6 +338,9 @@ void display()
 			break;
 		case 5:
 			japanFlag();
+			break;
+		case 6:
+			challenge();
 			break;
 	default:
 		break;
