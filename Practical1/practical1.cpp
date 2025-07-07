@@ -5,7 +5,7 @@
 
 #pragma comment (lib, "OpenGL32.lib")
 
-#define WINDOW_TITLE "Tung Tung Tung"
+#define WINDOW_TITLE "Practical 1"
 
 int qNo = 0; // Question number
 float x = 0, y = 0; // Circle origin coordinates
