@@ -6,6 +6,7 @@
 
 #define WINDOW_TITLE "Practical 2"
 
+int qNo = 0; // Question number
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -16,7 +17,30 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		break;
 
 	case WM_KEYDOWN:
-		if (wParam == VK_ESCAPE) PostQuitMessage(0);
+		if (wParam == VK_ESCAPE) {
+			PostQuitMessage(0);
+		}
+		else if (wParam == '0') {
+			qNo = 0;
+		}
+		else if (wParam == '1') {
+			qNo = 1;
+		}
+		else if (wParam == '2') {
+			qNo = 2;
+		}
+		else if (wParam == '3') {
+			qNo = 3;
+		}
+		else if (wParam == '4') {
+			qNo = 4;
+		}
+		else if (wParam == '5') {
+			qNo = 5;
+		}
+		else if (wParam == '6') {
+			qNo = 6;
+		}
 		break;
 
 	default:
@@ -59,9 +83,8 @@ bool initPixelFormat(HDC hdc)
 }
 //--------------------------------------------------------------------
 
-void display()
-{
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
+void demo() {
+	glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
 
 	glBegin(GL_TRIANGLES); // Start drawing triangles
@@ -69,6 +92,80 @@ void display()
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
 	glEnd(); // End drawing triangles
+}
+
+void translateDemo1() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
+	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+
+	glTranslated(0.0001, 0.0, 0.0); // Move the origin to the right
+	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glVertex2f(-0.5, 0.0);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.5, 0.0);
+	glEnd(); // End drawing triangles
+}
+
+void translateDemo2() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
+	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+
+	glLoadIdentity(); // Load the identity matrix
+	glTranslated(0.4, 0.0, 0.0); // Move the origin to the right
+	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glVertex2f(-0.5, 0.0);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.5, 0.0);
+	glEnd(); // End drawing triangles
+}
+
+void rotateDemo1() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
+	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+
+	glRotatef(0.01, 0.0, 0.0, 1.0);
+	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glVertex2f(-0.5, 0.0);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.5, 0.0);
+	glEnd();
+}
+
+void rotateDemo2() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
+	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+
+	glLoadIdentity(); // Load the identity matrix
+	glRotatef(90, 0.0, 0.0, 1.0);
+	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glVertex2f(-0.5, 0.0);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.5, 0.0);
+	glEnd();
+}
+
+void display()
+{
+	switch (qNo)
+	{
+	case 0:
+		demo();
+		break;
+	case 1:
+		translateDemo1();
+		break;
+	case 2:
+		translateDemo2();
+		break;
+	case 3:
+		rotateDemo1();
+		break;
+	case 4:
+		rotateDemo2();
+		break;
+	default:
+		break;
+	}
 }
 //--------------------------------------------------------------------
 
