@@ -87,6 +87,7 @@ void demo() {
 	glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
 
+	glLoadIdentity();
 	glBegin(GL_TRIANGLES); // Start drawing triangles
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
@@ -98,7 +99,7 @@ void translateDemo1() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
 
-	glTranslated(0.0001, 0.0, 0.0); // Move the origin to the right
+	glTranslated(0.001, 0.0, 0.0); // Move the origin to the right
 	glBegin(GL_TRIANGLES); // Start drawing triangles
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
@@ -123,7 +124,7 @@ void rotateDemo1() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
 
-	glRotatef(0.01, 0.0, 0.0, 1.0);
+	glRotatef(0.1, 0.0, 0.0, 1.0);
 	glBegin(GL_TRIANGLES); // Start drawing triangles
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
