@@ -45,6 +45,9 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		} else if (wParam == '6') {
 			qNo = 6;
 		}
+		else if (wParam == '7') {
+			qNo = 7;
+		}
 		break;
 	
 	default:
@@ -419,6 +422,146 @@ void challenge() {
 	glEnd();
 }
 
+void challenge1() {
+	glClearColor(1.0, 1.0, 1.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glBegin(GL_QUADS); // Right Hair
+	glColor3f(0.0, 0.0, 0.0);
+	glVertex2f(0.68, -0.1);
+	glVertex2f(0.68, 0.7);
+	glVertex2f(0.55, 0.7);
+	glVertex2f(0.55, -0.1);
+	glEnd();
+
+	glBegin(GL_TRIANGLE_FAN); // Head
+	glColor3f(1, 1, 0);
+	glVertex2f(x, y);
+	for (angle = 0; angle < 2 * PI; angle += (2 * PI) / noOfTri) {
+		x2 = x + 0.7 * cos(angle);
+		y2 = y + 0.7 * sin(angle);
+		glVertex2f(x2, y2);
+	}
+	glEnd();
+
+	glBegin(GL_LINE_STRIP);
+	glColor3f(0, 0, 0);
+
+	startAngle = PI / 6.0;
+	endAngle = PI - (PI / 6.0);
+
+	for (angle = startAngle; angle <= endAngle; angle += (endAngle - startAngle) / noOfTri) {
+		x2 = 0.4 + 0.2 * cos(angle);
+		y2 = 0.1 + 0.2 * sin(angle);
+		glVertex2f(x2, y2);
+	}
+
+	glEnd();
+
+	glBegin(GL_TRIANGLE_FAN); //Right Lens
+	glColor3f(0, 0, 0);
+	glVertex2f(0.7, 0.1);
+	for (angle = PI; angle <= 2 * PI; angle += PI / noOfTri) {
+		x2 = 0.4 + 0.3 * cos(angle);
+		y2 = 0.1 + 0.3 * sin(angle);
+		glVertex2f(x2, y2);
+	}
+	glEnd();
+
+	glBegin(GL_LINE_STRIP);
+	glColor3f(0, 0, 0);
+	glVertex2f(-0.4, 0.2);
+	glVertex2f(0.0, 0.2);
+	glEnd();
+
+	glBegin(GL_QUADS);// Right Lens Shine
+	glColor3f(1.0, 1.0, 1.0);
+
+	glVertex2f(-0.14 + 0.6, 0.1);
+	glVertex2f(-0.12 + 0.6, 0.1);
+	glVertex2f(-0.18 + 0.6, -0.1);
+	glVertex2f(-0.20 + 0.6, -0.1);
+
+	glEnd();
+
+	glBegin(GL_QUADS);// Right Lens Shine
+	glColor3f(1.0, 1.0, 1.0);
+
+	glVertex2f(-0.20 + 0.6, 0.1);
+	glVertex2f(-0.16 + 0.6, 0.1);
+	glVertex2f(-0.22 + 0.6, -0.1);
+	glVertex2f(-0.26 + 0.6, -0.1);
+
+	glEnd();
+
+	glBegin(GL_TRIANGLE_FAN); //Left Lens
+	glColor3f(0, 0, 0);
+	glVertex2f(-0.2, 0.1);
+	for (angle = PI; angle <= 2 * PI; angle += PI / noOfTri) {
+		x2 = -0.2 + 0.3 * cos(angle);
+		y2 = 0.1 + 0.3 * sin(angle);
+		glVertex2f(x2, y2);
+	}
+	glEnd();
+
+	glBegin(GL_QUADS);// Left Lens Shine
+	glColor3f(1.0, 1.0, 1.0);
+
+	glVertex2f(-0.14, 0.1);
+	glVertex2f(-0.12, 0.1);
+	glVertex2f(-0.18, -0.1);
+	glVertex2f(-0.20, -0.1);
+
+	glEnd();
+
+	glBegin(GL_QUADS);// Left Lens Shine
+	glColor3f(1.0, 1.0, 1.0);
+
+	glVertex2f(-0.20, 0.1);
+	glVertex2f(-0.16, 0.1);
+	glVertex2f(-0.22, -0.1);
+	glVertex2f(-0.26, -0.1);
+
+	glEnd();
+
+	glBegin(GL_QUADS); // Glasses Bridge
+	glColor3f(0.0, 0.0, 0.0);
+	glVertex2f(-0.7, 0.1);
+	glVertex2f(-0.7, 0.05);
+	glVertex2f(0.7, 0.05);
+	glVertex2f(0.7, 0.1);
+	glEnd();
+
+	glBegin(GL_QUADS); // Left Hair
+	glColor3f(0.0, 0.0, 0.0);
+	glVertex2f(-0.8, -0.1);
+	glVertex2f(-0.8, 0.7);
+	glVertex2f(-0.55, 0.7);
+	glVertex2f(-0.55, -0.1);
+	glEnd();
+
+	glBegin(GL_LINE_STRIP); // Mouth
+	glColor3f(0, 0, 0);
+
+	startAngle = PI + (PI / 6.0);
+	endAngle = PI + (PI * 5.0 / 6.0);
+
+	for (angle = startAngle; angle <= endAngle; angle += (endAngle - startAngle) / noOfTri) {
+		x2 = 0.1 + 0.3 * cos(angle);  // center at (0.1, -0.2)
+		y2 = -0.2 + 0.3 * sin(angle);
+		glVertex2f(x2, y2);
+	}
+
+	glEnd();
+
+	glBegin(GL_TRIANGLES);
+	glColor3f(0.6, 0.3, 0.0);
+	glVertex2f(0.1, 0.0);
+	glVertex2f(0.1, -0.3);
+	glVertex2f(0.25, -0.3);
+	glEnd();
+}
+
 void display()
 {
 	switch (qNo)
@@ -443,6 +586,9 @@ void display()
 			break;
 		case 6:
 			challenge();
+			break;
+		case 7:
+			challenge1();
 			break;
 	default:
 		break;

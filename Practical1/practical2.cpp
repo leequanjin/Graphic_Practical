@@ -41,6 +41,9 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		else if (wParam == '6') {
 			qNo = 6;
 		}
+		else if (wParam == '7') {
+			qNo = 7;
+		}
 		break;
 
 	default:
@@ -87,7 +90,9 @@ void demo() {
 	glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
 
-	glLoadIdentity();
+	glTranslated(0.0, 0.0, 0.0);
+	glRotatef(0.0, 0.0, 0.0, 1.0);
+	glScalef(1, 1, 1);
 	glBegin(GL_TRIANGLES); // Start drawing triangles
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
@@ -99,7 +104,7 @@ void translateDemo1() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
 
-	glTranslated(0.001, 0.0, 0.0); // Move the origin to the right
+	glTranslated(0.0005, 0.0, 0.0); // Move the origin to the right
 	glBegin(GL_TRIANGLES); // Start drawing triangles
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
@@ -124,7 +129,7 @@ void rotateDemo1() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
 
-	glRotatef(0.1, 0.0, 0.0, 1.0);
+	glRotatef(0.05, 0.0, 0.0, 1.0);
 	glBegin(GL_TRIANGLES); // Start drawing triangles
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
@@ -145,6 +150,43 @@ void rotateDemo2() {
 	glEnd();
 }
 
+void scaleDemo1() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
+	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+
+	glScalef(0.9998, 0.9998, 0.9998);
+	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glVertex2f(-0.5, 0.0);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.5, 0.0);
+	glEnd();
+}
+
+void scaleDemo2() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
+	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+
+	glScalef(1.0002, 1.0002, 1.0002);
+	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glVertex2f(-0.5, 0.0);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.5, 0.0);
+	glEnd();
+}
+
+void scaleDemo3() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
+	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+
+	glLoadIdentity(); // Load the identity matrix
+	glScalef(0.5, 0.5, 0.5);
+	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glVertex2f(-0.5, 0.0);
+	glVertex2f(0.0, 0.5);
+	glVertex2f(0.5, 0.0);
+	glEnd();
+}
+
 void display()
 {
 	switch (qNo)
@@ -156,13 +198,22 @@ void display()
 		translateDemo1();
 		break;
 	case 2:
-		translateDemo2();
-		break;
-	case 3:
 		rotateDemo1();
 		break;
+	case 3:
+		scaleDemo1();
+		break;
 	case 4:
+		scaleDemo2();
+		break;
+	case 5:
+		translateDemo2();
+		break;
+	case 6:
 		rotateDemo2();
+		break;
+	case 7:
+		scaleDemo3();
 		break;
 	default:
 		break;
