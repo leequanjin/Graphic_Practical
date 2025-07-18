@@ -7,12 +7,22 @@
 
 #define WINDOW_TITLE "Practical 2"
 
-int qNo = 0;
+int qNo = 1;
+
 float tx = 0, ty = 0, tSpeed = 0.1;
-float r = 1, g = 1, b = 1;
+
+float r = 1, g = 1, b = 1, colorSpeed = 0.005;
+
+float rAngle = 0.05;
+int rDirection = 0;
+
+float scale = 1;
 
 float PI = 3.14159265358979323846f;
-float radius = 0.3;
+float outerRadius = 0.6;
+float innerRadius = 0.2;
+int numPoints = 5;
+
 float angle = 0;
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -27,6 +37,20 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		if (wParam == VK_ESCAPE) {
 			PostQuitMessage(0);
 		}
+		//switch ques
+		else if (wParam == '1') {
+			qNo = 1;
+		}
+		else if (wParam == '2') {
+			qNo = 2;
+		}
+		else if (wParam == '3') {
+			qNo = 3;
+		}
+		else if (wParam == '4') {
+			qNo = 4;
+		}
+		//translate fixed
 		else if (wParam == VK_RIGHT) {
 			tx += tSpeed;
 		}
@@ -39,6 +63,45 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		else if (wParam == VK_DOWN) {
 			ty -= tSpeed;
 		}
+		//translate continuous
+		else if (wParam == 'D') {
+			tx = tSpeed / 2;
+			ty = 0.0;
+		}
+		else if (wParam == 'A') {
+			tx = -tSpeed / 2;
+			ty = 0.0;
+		}
+		else if (wParam == 'W') {
+			tx = 0.0;
+			ty = tSpeed / 2;
+		}
+		else if (wParam == 'S') {
+			tx = 0.0;
+			ty = -tSpeed / 2;
+		}
+		//rotate
+		else if (wParam == 'Q') {
+			rDirection = 1;
+		}
+		else if (wParam == 'E') {
+			rDirection = -1;
+		}
+		//scale
+		else if (wParam == 'Z') {
+			scale = 0.9998;
+		}
+		else if (wParam == 'C') {
+			scale = 1.0002;
+		}
+		//stop
+		else if (wParam == 'X') {
+			tx = 0.0;
+			ty = 0.0;
+			rDirection = 0;
+			scale = 1;
+		}
+		//color
 		else if (wParam == 'R') {
 			r = 1;
 			g = 0;
@@ -54,7 +117,9 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			g = 0;
 			b = 1;
 		}
+		//reset
 		else if (wParam == VK_SPACE) {
+			glLoadIdentity();
 			tx = 0;
 			ty = 0;
 			r = 1;
@@ -102,30 +167,20 @@ bool initPixelFormat(HDC hdc)
 	}
 }
 //--------------------------------------------------------------------
-void demo() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); 
-	glClear(GL_COLOR_BUFFER_BIT); 
+void updateColor() {
+	static float t = 0.0f;
+	r = 0.5f + 0.5f * sin(t);
+	g = 0.5f + 0.5f * sin(t + 2 * PI / 3);
+	b = 0.5f + 0.5f * sin(t + 4 * PI / 3);
+	t += colorSpeed;
+}
 
-	float outerRadius = 0.6f;
-	float innerRadius = 0.2f;
-	int numPoints = 5;
-	
-	r -= 0.0;
-	g -= 0.0;
-	b -= 0.0;
+void star() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	glLoadIdentity();
 	glTranslated(tx, ty, 0.0);
-	
-	glBegin(GL_LINE_LOOP);
-	glColor3f(1, 0, 0);
-	for (int i = 0; i <= numPoints * 2; i++) {
-		float angleDeg = 18 + i * 36;
-		float angleRad = angleDeg * (PI / 180.0f);
-		float radius = (i % 2 == 0) ? outerRadius : innerRadius;
-		glVertex2f(radius * cos(angleRad), radius * sin(angleRad));
-	}
-	glEnd();
 
 	glColor3f(r, g, b);
 	glBegin(GL_TRIANGLE_FAN);
@@ -142,9 +197,86 @@ void demo() {
 	glEnd();
 }
 
+void colorStar() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	updateColor();
+	glRotatef((rAngle * rDirection), 0.0, 0.0, 1.0);
+	glTranslated((tx / 100), (ty / 100), 0.0);
+	glScalef(scale, scale, scale);
+
+	glColor3f(r, g, b);
+	glBegin(GL_TRIANGLE_FAN);
+
+	glVertex2f(0.0f, 0.0f);
+
+	for (int i = 0; i <= numPoints * 2; i++) {
+		float angleDeg = 18 + i * 36;
+		float angleRad = angleDeg * (PI / 180.0f);
+		float radius = (i % 2 == 0) ? outerRadius : innerRadius;
+		glVertex2f(radius * cos(angleRad), radius * sin(angleRad));
+	}
+
+	glEnd();
+}
+
+void point() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	angle += 0.1;
+
+	glLoadIdentity();
+	float angleRad = angle * (PI / 180.0f);
+	float x = outerRadius * cos(angleRad);
+	float y = outerRadius * sin(angleRad);
+
+	glColor3f(1.0, 0.0, 0.0);
+	glPointSize(10.0f);
+	glBegin(GL_POINTS);
+	glVertex2f(x, y);
+	glEnd();
+}
+
+void box() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glScalef(1.0002, 1.0002, 1.0002);
+	glColor3f(1.0, 0.0, 0.0);
+	glPointSize(10.0f);
+	glBegin(GL_QUADS);
+	glVertex2f(0.1, 0.1);
+	glVertex2f(-0.1, 0.1);
+	glVertex2f(-0.1, -0.1);
+	glVertex2f(0.1, -0.1);
+	glEnd();
+}
+
+void demo() {
+	star();
+}
+
 void display()
 {
-	demo();
+	switch (qNo)
+	{
+	case 1:
+		star();
+		break;
+	case 2:
+		colorStar();
+		break;
+	case 3:
+		point();
+		break;
+	case 4:
+		box();
+		break;
+	default:
+		break;
+	}
 }
 //--------------------------------------------------------------------
 
