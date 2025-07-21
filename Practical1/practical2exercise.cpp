@@ -21,6 +21,8 @@ float scale = 1;
 float PI = 3.14159265358979323846f;
 float outerRadius = 0.6;
 float innerRadius = 0.2;
+float outerAngle = 0;
+float innerAngle = 0;
 int numPoints = 10;
 
 float angle = 0;
@@ -189,8 +191,8 @@ void star() {
 
 	glVertex2f(0.0f, 0.0f);
 
-	for (int i = 0; i <= numPoints * 2; i++) {
-		float angleDeg = 9 + i * 18;
+	for (int i = 0; i <= 5 * 2; i++) {
+		float angleDeg = 18 + i * 36;
 		float angleRad = angleDeg * (PI / 180.0f);
 		float radius = (i % 2 == 0) ? outerRadius : innerRadius;
 		glVertex2f(radius * cos(angleRad), radius * sin(angleRad));

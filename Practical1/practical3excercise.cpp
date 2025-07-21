@@ -1,11 +1,27 @@
 
 #include <Windows.h>
 #include <gl/GL.h>
+#include <math.h>
 
 #pragma comment (lib, "OpenGL32.lib")
 
 #define WINDOW_TITLE "OpenGL Window"
 
+float tx1 = 0, ty1 = 0;
+float tx2 = 0, ty2 = 0;
+float tSpeed = 0.1;
+
+float rAngle = 0;
+float rSpeed = 0.05;
+int rDirection = 0;
+
+int qNo = 1; 
+float x = 0, y = 0; // Circle origin coordinates
+float radius = 0; 
+float angle = 0;
+float x2 = 0, y2 = 0; 
+float PI = 3.14159265358979323846f;	
+int noOfTri = 30; 
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -16,7 +32,37 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		break;
 
 	case WM_KEYDOWN:
-		if (wParam == VK_ESCAPE) PostQuitMessage(0);
+		if (wParam == VK_ESCAPE) {
+			PostQuitMessage(0);
+		}
+		else if (wParam == '1') {
+			qNo = 1;
+		}
+		else if (wParam == '2') {
+			qNo = 2;
+		}
+		else if (wParam == VK_LEFT) {
+			tx1 += -tSpeed;
+			tx2 += tSpeed;
+		}
+		else if (wParam == VK_RIGHT) {
+			tx1 += tSpeed;
+			tx2 += -tSpeed;
+		}
+		else if (wParam == VK_DOWN) {
+			ty1 += -tSpeed;
+			ty2 += tSpeed;
+		}
+		else if (wParam == VK_UP) {
+			ty1 += tSpeed;
+			ty2 += -tSpeed;
+		}
+		else if (wParam == VK_SPACE) {
+			tx1 = 0;
+			tx2 = 0;
+			ty1 = 0;
+			ty2 = 0;
+		}
 		break;
 
 	default:
@@ -57,65 +103,81 @@ bool initPixelFormat(HDC hdc)
 		return false;
 	}
 }
+//--------------------------------------------------------------------
 
-void demo() {
+void p3q1() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	//BLOCK 5 : obj 1, obj 2 & obj 3 
+	//BLOCK 1 : obj 1 : Blue Quad
 	glPushMatrix();
-	glScaled(0.5, 0.5, 0.5); // sx(0.5, 0.5, 0.5)
-
-		//BLOCK 4 : obj 1 & obj 2
-		glPushMatrix();
-		glRotatef(90, 0.0, 0.0, 1.0); // rz(90) anticlockwise
-	
-			//BLOCK 1 : obj 1 : Red Triangle
-			glPushMatrix();
-				glTranslated(0.0, 0.5, 0.0); // ty(0.5) UP
-
-				glBegin(GL_TRIANGLES); 
-				glColor3f(1.0, 0.0, 0.0);
-					glVertex2f(-0.5, 0.0);
-					glVertex2f(0.0, 0.5);
-					glVertex2f(0.5, 0.0);
-				glEnd();
-			glPopMatrix();
-
-			//BLOCK 2 : obj 2 : Green Quad
-			glPushMatrix();
-				glTranslated(-0.5, 0.0, 0.0); // tx(-0.5) LEFT
-				glBegin(GL_QUADS); 
-				glColor3f(0.0, 1.0, 0.0);
-					glVertex2f(-0.5, 0.0);
-					glVertex2f(-0.5, 0.5);
-					glVertex2f(0.5, 0.5);
-					glVertex2f(0.5, 0.0);
-				glEnd();
-			glPopMatrix();
-
-		glPopMatrix();
-
-		//BLOCK 3 : obj 3 : Blue Quad
-		glPushMatrix();
-			glTranslated(0.5, 0.0, 0.0); // tx(0.5) RIGHT
-			glBegin(GL_QUADS); 
+		glTranslated(tx1, ty1, 0.0); // tx(-0.5) LEFT
+		glBegin(GL_QUADS);
 			glColor3f(0.0, 0.0, 1.0);
-				glVertex2f(-0.5, 0.0);
-				glVertex2f(-0.5, 0.5);
-				glVertex2f(0.5, 0.5);
-				glVertex2f(0.5, 0.0);
-			glEnd();
-		glPopMatrix();
+			glVertex2f(-0.25, -0.25);
+			glVertex2f(-0.25, 0.25);
+			glVertex2f(0.25, 0.25);
+			glVertex2f(0.25, -0.25);
+		glEnd();
+	glPopMatrix();
 
+	//BLOCK 2 : obj 2 : Green Quad
+	glPushMatrix();
+		glTranslated(tx2, ty2, 0.0); // tx(0.5) RIGHT
+		glBegin(GL_QUADS);
+			glColor3f(0.0, 1.0, 0.0);
+			glVertex2f(-0.25, -0.25);
+			glVertex2f(-0.25, 0.25);
+			glVertex2f(0.25, 0.25);
+			glVertex2f(0.25, -0.25);
+		glEnd();
 	glPopMatrix();
 }
 
-//--------------------------------------------------------------------
+void fan() {
+	glPushMatrix();
+	glRotatef((rAngle * rDirection), 0.0, 0.0, 1.0);
+		glBegin(GL_QUADS);
+			glColor3f(0.0, 1.0, 0.0);
+			glVertex2f(-0.25, -0.25);
+			glVertex2f(-0.25, 0.25);
+			glVertex2f(0.25, 0.25);
+			glVertex2f(0.25, -0.25);
+		glEnd();
+	glPopMatrix();
+}
+
+void p3q2() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	x = 0;
+	y = 0;
+	radius = 0.2;
+	glBegin(GL_TRIANGLE_FAN);
+	glColor3f(1, 1, 1);
+	glVertex2f(x, y); // Center of the circle
+	for (angle = 0; angle < 2 * PI; angle += (2 * PI) / noOfTri) {
+		x2 = x + radius * cos(angle);
+		y2 = y + radius * sin(angle);
+		glVertex2f(x2, y2); // Calculate the circle point coordinates
+	}
+	glEnd();
+}
 
 void display()
 {
-	demo();
+	switch (qNo)
+	{
+	case 1:
+		p3q1();
+		break;
+	case 2:
+		p3q2();
+		break;
+	default:
+		break;
+	}
 }
 //--------------------------------------------------------------------
 
