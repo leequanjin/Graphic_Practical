@@ -87,50 +87,50 @@ bool initPixelFormat(HDC hdc)
 //--------------------------------------------------------------------
 
 void demo() {
-	glClearColor(1.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+	glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	glTranslated(0.0, 0.0, 0.0);
 	glRotatef(0.0, 0.0, 0.0, 1.0);
 	glScalef(1, 1, 1);
-	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glBegin(GL_TRIANGLES);
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
-	glEnd(); // End drawing triangles
+	glEnd();
 }
 
 void translateDemo1() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
-	glTranslated(0.0005, 0.0, 0.0); // Move the origin to the right
-	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glTranslated(0.0005, 0.0, 0.0);
+	glBegin(GL_TRIANGLES);
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
-	glEnd(); // End drawing triangles
+	glEnd();
 }
 
 void translateDemo2() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
-	glLoadIdentity(); // Load the identity matrix
-	glTranslated(0.4, 0.0, 0.0); // Move the origin to the right
-	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glLoadIdentity();
+	glTranslated(0.4, 0.0, 0.0);
+	glBegin(GL_TRIANGLES);
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
-	glEnd(); // End drawing triangles
+	glEnd();
 }
 
 void rotateDemo1() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	glRotatef(0.05, 0.0, 0.0, 1.0);
-	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glBegin(GL_TRIANGLES);
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
@@ -138,12 +138,12 @@ void rotateDemo1() {
 }
 
 void rotateDemo2() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
-	glLoadIdentity(); // Load the identity matrix
+	glLoadIdentity();
 	glRotatef(90, 0.0, 0.0, 1.0);
-	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glBegin(GL_TRIANGLES);
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
@@ -151,11 +151,11 @@ void rotateDemo2() {
 }
 
 void scaleDemo1() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	glScalef(0.9998, 0.9998, 0.9998);
-	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glBegin(GL_TRIANGLES);
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
@@ -163,11 +163,11 @@ void scaleDemo1() {
 }
 
 void scaleDemo2() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	glScalef(1.0002, 1.0002, 1.0002);
-	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glBegin(GL_TRIANGLES);
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
@@ -175,12 +175,12 @@ void scaleDemo2() {
 }
 
 void scaleDemo3() {
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-	glClear(GL_COLOR_BUFFER_BIT); // Clear the color and depth buffers
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 
-	glLoadIdentity(); // Load the identity matrix
+	glLoadIdentity();
 	glScalef(0.5, 0.5, 0.5);
-	glBegin(GL_TRIANGLES); // Start drawing triangles
+	glBegin(GL_TRIANGLES);
 	glVertex2f(-0.5, 0.0);
 	glVertex2f(0.0, 0.5);
 	glVertex2f(0.5, 0.0);
