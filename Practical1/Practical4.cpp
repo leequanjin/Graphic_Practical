@@ -7,7 +7,7 @@
 #define WINDOW_TITLE "OpenGL Window"
 
 int qNo = 1;
-
+float rx = 0, ry = 0, rz = 0;
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -32,6 +32,20 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		}
 		else if (wParam == '4') {
 			qNo = 4;
+		}
+		else if (wParam == 'X') {
+			rx = 0.1;
+		}
+		else if (wParam == 'Y') {
+			ry = 0.1;
+		}
+		else if (wParam == 'Z') {
+			rz = 0.1;
+		}
+		else if (wParam == VK_SPACE) {
+			rx = 0.0;
+			ry = 0.0;
+			rz = 0.0;
 		}
 		break;
 
@@ -75,15 +89,103 @@ bool initPixelFormat(HDC hdc)
 }
 //--------------------------------------------------------------------
 
+void drawCube(float size) {
+	glBegin(GL_QUADS);
+		// Face 1 : Front
+		glColor3f(1.0f, 0.0f, 0.0f);
+			glVertex3f(0.0f, 0.0f, size);
+			glVertex3f(size, 0.0f, size);
+			glVertex3f(size, 0.0f, 0.0f);
+			glVertex3f(0.0f, 0.0f, 0.0f);
+		// Face 2 : Left
+		glColor3f(0.0f, 1.0f, 0.0f);
+			glVertex3f(0.0f, 0.0f, 0.0f);
+			glVertex3f(0.0f, size, 0.0f);
+			glVertex3f(0.0f, size, size);
+			glVertex3f(0.0f, 0.0f, size);
+		// Face 3 : Top
+		glColor3f(0.0f, 0.0f, 1.0f);
+			glVertex3f(0.0f, 0.0f, size);
+			glVertex3f(0.0f, size, size);
+			glVertex3f(size, size, size);
+			glVertex3f(size, 0.0f, size);
+		// Face 4 : Right
+		glColor3f(0.5f, 0.0f, 0.5f);
+			glVertex3f(size, 0.0f, size);
+			glVertex3f(size, size, size);
+			glVertex3f(size, size, 0.0f);
+			glVertex3f(size, 0.0f, 0.0f);
+		// Face 5 : Bottom
+		glColor3f(0.5f, 0.5f, 0.0f);
+			glVertex3f(size, 0.0f, 0.0f);
+			glVertex3f(0.0f, 0.0f, 0.0f);
+			glVertex3f(0.0f, size, 0.0f);
+			glVertex3f(size, size, 0.0f);
+		// Face 6 : Back
+		glColor3f(0.0f, 0.5f, 0.5f);
+			glVertex3f(size, size, 0.0f);
+			glVertex3f(0.0f, size, 0.0f);
+			glVertex3f(0.0f, size, size);
+			glVertex3f(size, size, size);
+	glEnd();
+}
+
+void drawPyramid(float size) {
+	glBegin(GL_LINE_LOOP);
+	// Face 1 : Base
+	glColor3f(1.0f, 0.0f, 0.0f);
+		glVertex3f(0.0f, 0.0f, size);
+		glVertex3f(size, 0.0f, size);
+		glVertex3f(size, 0.0f, 0.0f);
+		glVertex3f(0.0f, 0.0f, 0.0f);
+		// Face 1 
+		glVertex3f(size / 2, size, size / 2);
+		glVertex3f(0.0f, 0.0f, size);
+		// Face 2 
+		glVertex3f(size / 2, size, size / 2);
+		glVertex3f(size, 0.0f, size);
+		// Face 3 
+		glVertex3f(size / 2, size, size / 2);
+		glVertex3f(size, 0.0f, 0.0f);
+		// Face 4 
+		glVertex3f(size / 2, size, size / 2);
+		glVertex3f(0.0f, 0.0f, 0.0f);
+	glEnd();
+}
+
+
 void demo() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
 
-	glBegin(GL_TRIANGLES);
-	glVertex2f(-0.5, 0.0);
-	glVertex2f(0.0, 0.5);
-	glVertex2f(0.5, 0.0);
-	glEnd();
+	glRotatef(rx, 1.0f, 0.0f, 0.0f);
+	glRotatef(ry, 0.0f, 1.0f, 0.0f);
+	glRotatef(rz, 0.0f, 0.0f, 1.0f);
+	drawCube(0.5f);
+	drawCube(-0.5f);
+}
+
+void prac4A1() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
+
+	glRotatef(rx, 1.0f, 0.0f, 0.0f);
+	glRotatef(ry, 0.0f, 1.0f, 0.0f);
+	glRotatef(rz, 0.0f, 0.0f, 1.0f);
+	drawPyramid(0.5f);
+}
+
+void prac4A2() {
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
+
+	glRotatef(rx, 1.0f, 0.0f, 0.0f);
+	glRotatef(ry, 0.0f, 1.0f, 0.0f);
+	glRotatef(rz, 0.0f, 0.0f, 1.0f);
+	drawPyramid(0.5f);
 }
 
 void display()
@@ -94,10 +196,10 @@ void display()
 		demo();
 		break;
 	case 2:
-
+		prac4A1();
 		break;
 	case 3:
-
+		prac4A2();
 		break;
 	case 4:
 

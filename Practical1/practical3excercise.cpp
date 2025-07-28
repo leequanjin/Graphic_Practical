@@ -102,8 +102,8 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			tx2 = 0;
 			ty1 = 0;
 			ty2 = 0;
-			rSpeed = 0.05;
-			rDirection = 0;
+			rSpeed = 0.0;
+			cloudSpeed = 0.0f;
 			noOfBlade = 4;
 		}
 		break;
