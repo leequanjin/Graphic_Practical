@@ -8,6 +8,8 @@
 
 int qNo = 1;
 float rx = 0, ry = 0, rz = 0;
+bool isRotateLowerArm = false, isRotateWholeArm = false;
+float rLowerArm = 0, rWholeArm = 0;
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -46,6 +48,36 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			rx = 0.0;
 			ry = 0.0;
 			rz = 0.0;
+			rLowerArm = 0.0;
+			rWholeArm = 0.0;
+			isRotateLowerArm = false;
+			isRotateWholeArm = false;
+			glLoadIdentity();
+		}
+		else if (wParam == VK_UP) {
+			isRotateWholeArm = true;
+			break;
+		}
+		else if (wParam == VK_DOWN) {
+			isRotateWholeArm = false;
+			break;
+		}
+		else if (wParam == VK_RIGHT) {
+			isRotateLowerArm = true;
+			break;
+		}
+		else if (wParam == VK_LEFT) {
+			isRotateLowerArm = false;
+			break;
+		}
+		else if (wParam == '0') {
+			rx = 0.0;
+			ry = 0.0;
+			rz = 0.0;
+			rLowerArm = 0.0;
+			rWholeArm = 0.0;
+			isRotateLowerArm = false;
+			isRotateWholeArm = false;
 		}
 		break;
 
@@ -153,6 +185,52 @@ void drawPyramid(float size) {
 	glEnd();
 }
 
+void drawRect(float x, float y, float z) {
+	glBegin(GL_LINES);
+	glColor3f(1.0f, 1.0f, 1.0f);
+
+	// Bottom rectangle
+	glVertex3f(0, 0, 0);
+	glVertex3f(x, 0, 0);
+
+	glVertex3f(x, 0, 0);
+	glVertex3f(x, 0, z);
+
+	glVertex3f(x, 0, z);
+	glVertex3f(0, 0, z);
+
+	glVertex3f(0, 0, z);
+	glVertex3f(0, 0, 0);
+
+	// Top rectangle
+	glVertex3f(0, y, 0);
+	glVertex3f(x, y, 0);
+
+	glVertex3f(x, y, 0);
+	glVertex3f(x, y, z);
+
+	glVertex3f(x, y, z);
+	glVertex3f(0, y, z);
+
+	glVertex3f(0, y, z);
+	glVertex3f(0, y, 0);
+
+	// Vertical lines
+	glVertex3f(0, 0, 0);
+	glVertex3f(0, y, 0);
+
+	glVertex3f(x, 0, 0);
+	glVertex3f(x, y, 0);
+
+	glVertex3f(x, 0, z);
+	glVertex3f(x, y, z);
+
+	glVertex3f(0, 0, z);
+	glVertex3f(0, y, z);
+
+	glEnd();
+}
+
 
 void demo() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -182,11 +260,50 @@ void prac4A2() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
 
+	if (isRotateLowerArm) {
+		if (rLowerArm > -120.0f) {
+			rLowerArm -= 0.04f;
+		}
+	}
+	else {
+		if (rLowerArm < 0.0f) {
+			rLowerArm += 0.04f;
+		}
+	}
+	if (isRotateWholeArm) {
+		if (rWholeArm > -90.0f) {
+			rWholeArm -= 0.04f;
+		}
+	}
+	else {
+		if (rWholeArm < 0.0f) {
+			rWholeArm += 0.04f;
+		}
+	}
+
 	glRotatef(rx, 1.0f, 0.0f, 0.0f);
 	glRotatef(ry, 0.0f, 1.0f, 0.0f);
 	glRotatef(rz, 0.0f, 0.0f, 1.0f);
-	drawPyramid(0.5f);
+
+	glPushMatrix();
+	glRotatef(20, 1.0f, 0.0f, 0.0f);
+	glRotatef(20, 0.0f, 1.0f, 0.0f);
+
+	glPushMatrix();
+		glTranslatef(0.4f, 0.0f, 0.0f);
+		glRotatef(rWholeArm, 0.0f, 0.0f, 1.0f); 
+		glTranslatef(-0.4f, 0.0f, 0.0f);
+		drawRect(0.4f, 0.1f, 0.2f);               
+
+		glPushMatrix();
+			glRotatef(rLowerArm, 0.0f, 0.0f, 1.0f); 
+			drawRect(-0.4f, 0.1f, 0.2f);   
+		glPopMatrix();
+	glPopMatrix();
+
+	glPopMatrix();
 }
+
 
 void display()
 {
