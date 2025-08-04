@@ -1,6 +1,7 @@
-
+#include <math.h>
 #include <Windows.h>
 #include <gl/GL.h>
+#include <gl/GLU.h>
 
 #pragma comment (lib, "OpenGL32.lib")
 
