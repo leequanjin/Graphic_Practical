@@ -9,9 +9,14 @@
 
 int qNo = 1;
 float rx = 0, ry = 0, rz = 0;
-float tx = 0, ty = 0, tz = 0;
-float tSpeed = 0.02;
+float tx = 0, ty = 0, tz = -30;
+float tSpeed = 10;
+int r1 = 20; // size of the shape 
+float ONear = -5.0, OFar = 60.0;
+float PNear = 5.0, PFar = 60.0;
 bool isOrtho = false, isFrustum = false, isPerspective = true;
+float ptx = 0, pty = 0; //translate x and y for projection
+float ptSpeed = 1; //translation speed for projection
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -44,40 +49,77 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			qNo = 6;
 		}
 		else if (wParam == 'X') {
-			rx = 0.02;
+			rx += 0.02;
 		}
 		else if (wParam == 'Y') {
-			ry = 0.02;
+			ry += 0.02;
 		}
 		else if (wParam == 'Z') {
-			rz = 0.02;
+			rz += 0.02;
 		}
+
+		else if (wParam == 'A') {
+			ptx -= ptSpeed;
+		}
+		else if (wParam == 'D') {
+			ptx += ptSpeed;
+		}
+
 		else if (wParam == 'O') {
 			isOrtho = true;
 			isFrustum = false;
 			isPerspective = false;
-			tz = 0.0;
+			tz = -30;
 		}
 		else if (wParam == 'F') {
 			isOrtho = false;
 			isFrustum = true;
 			isPerspective = false;
-			tz = 0.0;
+			tz = -30;
 		}
 		else if (wParam == 'P') {
 			isOrtho = false;
 			isFrustum = false;
 			isPerspective = true;
-			tz = 0.0;
+			tz = -30;
 		}
 		else if (wParam == VK_UP) { // press "UP" aarrow key
-			tz = -tSpeed;
+			if (isOrtho)
+			{
+				if (tz > -OFar + r1)
+				{
+					tz -= tSpeed;
+				}
+			}
+			else
+			{
+				if (tz > PNear - PFar + r1)
+				{
+					tz -= tSpeed;
+				}
+			}
 		}
 		else if (wParam == VK_DOWN) { // press "DOWN" arrow key
-			tz = tSpeed;
-			//tz += tSpeed;
-			//glLoadIdentity();				// reset the transformation for the modelview matrix
-			//glTranslatef(0.0, 0.0, tz);		// translate z (near/far)
+			if (isOrtho)
+			{
+				if (tz < -ONear - r1)
+				{
+					tz += tSpeed;
+				}
+			}
+			else
+			{
+				if (tz < PNear - r1)
+				{
+					tz += tSpeed;
+				}
+			}
+		}
+		else if (wParam == VK_LEFT) {
+			tx -= tSpeed;
+		}
+		else if (wParam == VK_RIGHT) {
+			tx += tSpeed;
 		}
 		else if (wParam == '0') {
 			rx = 0.0;
@@ -297,6 +339,8 @@ void drawIceCream() {
 	glRotatef(ry, 0.0f, 1.0f, 0.0f);
 	glRotatef(rz, 0.0f, 0.0f, 1.0f);
 
+	glTranslatef(tx, ty, 0); // Translate the ice cream to the desired position
+
 	glPushMatrix(); // topping 1 cylinder
 		glTranslated(0.5, 6, -0.5);
 		glRotatef(270, 1.0f, 0.0f, 0.0f);
@@ -352,7 +396,10 @@ void demo() {
 
 	glMatrixMode(GL_MODELVIEW);		//refer to the modelview matrix
 	
+	glLoadIdentity();
 	glTranslatef(0.0, 0.0, tz);
+
+	glTranslatef(ptx, pty, 0.0f);
 	// demoSphere();
 	drawIceCream();
 }
@@ -362,11 +409,11 @@ void projection() {
 	glLoadIdentity(); // Remember to reset the projection matrix
 
 	if (isOrtho) {
-		glOrtho(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0); // default viewing model
+		glOrtho(-10.0, 10.0, -10.0, 10.0, ONear, OFar); // default viewing model
 	} else if (isFrustum) {
-		glFrustum(-10.0, 10.0, -10.0, 10.0, 5.0, 10.0); // perspective viewing model
+		glFrustum(-10.0, 10.0, -10.0, 10.0, -10.0, 10.0); // perspective viewing model
 	} else if (isPerspective) {
-		gluPerspective(20.0, 1.0, 1.0, -10.0); // perspective viewing model
+		gluPerspective(60.0, 1.0, PNear, PFar); // perspective viewing model
 	}
 }
 
