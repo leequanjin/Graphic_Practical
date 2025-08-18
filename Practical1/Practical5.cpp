@@ -9,14 +9,15 @@
 
 int qNo = 1;
 float rx = 0, ry = 0, rz = 0;
-float tx = 0, ty = 0, tz = -30;
-float tSpeed = 10;
+float tx = 0, ty = 0, tz = -20;
+float tSpeed = 1;
 int r1 = 20; // size of the shape 
 float ONear = -5.0, OFar = 60.0;
 float PNear = 5.0, PFar = 60.0;
 bool isOrtho = false, isFrustum = false, isPerspective = true;
 float ptx = 0, pty = 0; //translate x and y for projection
-float ptSpeed = 1; //translation speed for projection
+float pRy = 0, prSpeed = 1;
+float ptSpeed = 0.1; //translation speed for projection
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -63,6 +64,12 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		}
 		else if (wParam == 'D') {
 			ptx += ptSpeed;
+		}
+		else if (wParam == 'L') {
+			pRy += prSpeed;
+		}
+		else if (wParam == 'R') {
+			pRy -= prSpeed;
 		}
 
 		else if (wParam == 'O') {
@@ -399,14 +406,17 @@ void demo() {
 	glLoadIdentity();
 	glTranslatef(0.0, 0.0, tz);
 
-	glTranslatef(ptx, pty, 0.0f);
 	// demoSphere();
 	drawIceCream();
 }
 
 void projection() {
 	glMatrixMode(GL_PROJECTION); // <-- Add this for Orthographic Projection
+
 	glLoadIdentity(); // Remember to reset the projection matrix
+
+	glTranslatef(ptx, pty, 0.0f);
+	glRotatef(pRy, 0.0f, 1.0f, 0.0f);
 
 	if (isOrtho) {
 		glOrtho(-10.0, 10.0, -10.0, 10.0, ONear, OFar); // default viewing model
@@ -415,10 +425,13 @@ void projection() {
 	} else if (isPerspective) {
 		gluPerspective(60.0, 1.0, PNear, PFar); // perspective viewing model
 	}
+
 }
 
 void display()
 {
+	projection(); // Set the projection matrix
+	
 	switch (qNo)
 	{
 	case 1:
@@ -427,7 +440,6 @@ void display()
 	case 2:
 		break;
 	case 3:
-
 		break;
 	case 4:
 
@@ -483,8 +495,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow)
 
 	MSG msg;
 	ZeroMemory(&msg, sizeof(msg));		
-
-	projection(); // Set the projection matrix
 
 	while (true)
 	{
