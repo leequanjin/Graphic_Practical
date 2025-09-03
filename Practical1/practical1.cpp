@@ -94,16 +94,33 @@ void demo() {
 	glClearColor(0.0, 0.0, 0.0, 0.0); 
 	glClear(GL_COLOR_BUFFER_BIT); // Clear the color buffer
 
-	glLineWidth(5.0f); // Set the line width
-	glPointSize(10.0f); // Set the point size
+	/*glLoadIdentity();
+	glTranslated(0.0, 0.5, 0.0);
+	glBegin(GL_TRIANGLES);
+		glColor3f(0.0, 1.0, 0.0);
+		glVertex2f(-0.5, 0.0);
+		glVertex2f(0.0, 0.5);
+		glVertex2f(0.5, 0.0);
+	glEnd();
 
-	glBegin(GL_POLYGON); // Start drawing a line loop
-		glVertex2f(-0.5, 0.0); // P1 vertex
-		glColor3f(1.0, 0.0, 0.0); // Red vertex
-		glVertex2f(0.0, 0.5); // P2 vertex
-		glColor3f(0.0, 1.0, 0.0); // Green vertex
-		glVertex2f(0.5, 0.0); // P3 vertex
-		glColor3f(0.0, 0.0, 1.0); // Blue vertex
+	glTranslated(0.0, -0.5, 0.0);
+	glBegin(GL_TRIANGLES);
+		glColor3f(1.0, 0.0, 0.0);
+		glVertex2f(-0.5, 0.0);
+		glVertex2f(0.0, 0.5);
+		glVertex2f(0.5, 0.0);
+	glEnd();*/
+	glLineWidth(2.0);
+
+	glBegin(GL_TRIANGLE_STRIP);
+		glVertex2f(0.0, 0.8);
+		glVertex2f(0.2, 0.2);
+		glVertex2f(0.8, 0.0);
+		glVertex2f(0.2, -0.2);
+		glVertex2f(0.0, -0.8);
+		glVertex2f(-0.2, -0.2);
+		glVertex2f(-0.8, 0.0);
+		glVertex2f(-0.2, 0.2);
 	glEnd();
 }
 
