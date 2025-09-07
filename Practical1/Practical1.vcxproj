@@ -24,6 +24,7 @@
   <ItemGroup>
     <Image Include="..\x64\Debug\Box.bmp" />
     <Image Include="..\x64\Debug\brick.bmp" />
+    <Image Include="..\x64\Debug\ice.bmp" />
     <Image Include="..\x64\Debug\metal.bmp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

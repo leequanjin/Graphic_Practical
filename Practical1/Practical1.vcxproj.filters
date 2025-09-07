@@ -29,5 +29,8 @@
     <Image Include="..\x64\Debug\metal.bmp">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="..\x64\Debug\ice.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
