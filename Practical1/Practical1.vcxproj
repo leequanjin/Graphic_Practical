@@ -19,7 +19,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="assignment.cpp" />
+    <ClCompile Include="Practical7.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\x64\Debug\Box.bmp" />
+    <Image Include="..\x64\Debug\brick.bmp" />
+    <Image Include="..\x64\Debug\metal.bmp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
