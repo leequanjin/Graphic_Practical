@@ -19,13 +19,13 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Practical7.cpp" />
+    <Image Include="..\x64\Debug\brick.bmp" />
+    <Image Include="..\x64\Debug\metal.bmp" />
+    <Image Include="Box.bmp" />
+    <Image Include="ice.bmp" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\x64\Debug\Box.bmp" />
-    <Image Include="..\x64\Debug\brick.bmp" />
-    <Image Include="..\x64\Debug\ice.bmp" />
-    <Image Include="..\x64\Debug\metal.bmp" />
+    <ClCompile Include="Practical6.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

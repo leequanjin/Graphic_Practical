@@ -15,22 +15,22 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Practical7.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="..\x64\Debug\Box.bmp">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="..\x64\Debug\brick.bmp">
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="..\x64\Debug\metal.bmp">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="..\x64\Debug\ice.bmp">
+    <Image Include="ice.bmp">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="Box.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Practical6.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
