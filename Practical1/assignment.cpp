@@ -27,8 +27,8 @@ float camRotSpeed = 2.0f;
 
 // human position
 float hx = 0.f, hy = 0.f, hz = 0.f;
-float walkAnimSpeed = 0.5f; // speed of swing
-float humanSpeed = 0.02f; // speed of movement
+float walkAnimSpeed = 0.2f; // speed of swing
+float humanSpeed = 0.01f; // speed of movement
 
 // walk cycle
 float walkPhase = 0.f;       // angle in degrees
@@ -407,21 +407,13 @@ void drawHelmet(const HumanDims& d) {
 	drawBlock(d.headR * 2.1f, d.headR * 0.15f, d.headR * 2.1f);
 	glPopMatrix();
 
-	// simple visor (front plate)
-	glPushMatrix();
-	glTranslatef(0.f, d.headR * 0.20f, d.headR * 1.02f + Z_EPS);
-	drawBlock(d.headR * 1.2f, d.headR * 0.7f, d.headR * 0.15f);
-	glPopMatrix();
-
 	// plume (two cones)
 	glPushMatrix();
-	glTranslatef(0.f, d.headR * 0.95f, 0.f);
-	glRotatef(-18.f, 0, 0, 1);
-	useCloth(0.85f, 0.15f, 0.15f);
-	drawCylinder(0.06f, 0.0f, 0.01f); // tiny base (optional)
-	drawYCylinder(0.08f, 0.0f, d.headR * 0.9f); // long cone look
-	glRotatef(36.f, 0, 0, 1);
-	drawYCylinder(0.08f, 0.0f, d.headR * 0.9f);
+		glTranslatef(0.f, d.headR * 0.95f, 0.f);
+		glRotatef(-18.f, 0, 0, 1);
+		useCloth(0.85f, 0.15f, 0.15f);
+		drawSphere(0.1);
+		glRotatef(36.f, 0, 0, 1);
 	glPopMatrix();
 
 	glPopMatrix();
@@ -440,7 +432,7 @@ void drawShoulderPadAt(const HumanDims& d, bool left) {
 
 	glPushMatrix();
 	glTranslatef(x, y, 0.f);
-	glRotatef(side * 8.f, 0, 0, 1);
+	glRotatef(-side * 8.f, 0, 0, 1);
 	drawShoulderPadPiece(d.shoulderW, d.chestH * 0.18f, d.chestD);
 	glTranslatef(0, d.chestH * 0.12f, 0);
 	drawShoulderPadPiece(d.shoulderW * 0.9, d.chestH * 0.14f, d.chestD * 0.9);
@@ -504,6 +496,11 @@ void drawSkirtArmor(const HumanDims& d) {
 		glRotatef(side * 20.f, 0, 1, 0);
 		drawTrapezoidBlock(d.pelvisW * 0.10f, d.pelvisW * 0.1f,
 			d.upperLegL * 0.55f, d.pelvisD * 0.85f, d.pelvisD * 0.70f);
+			glPushMatrix();
+				glRotatef(side * 20.f, 0, 1, 0);
+				drawTrapezoidBlock(d.pelvisW * 0.10f, d.pelvisW * 0.1f,
+					d.upperLegL * 0.55f, d.pelvisD * 0.85f, d.pelvisD * 0.70f);
+			glPopMatrix();
 		glPopMatrix();
 	}
 }

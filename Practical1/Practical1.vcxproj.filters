@@ -29,7 +29,7 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Practical6.cpp">
+    <ClCompile Include="assignment.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

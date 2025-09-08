@@ -25,7 +25,7 @@
     <Image Include="ice.bmp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Practical6.cpp" />
+    <ClCompile Include="assignment.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

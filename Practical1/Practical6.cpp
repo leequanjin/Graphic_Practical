@@ -56,6 +56,9 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		else if (wParam == VK_UP) {
 			rDir = -1; // counter-clockwise
 		}
+		else if (wParam == '5') {
+			rDir = 0; // pause
+		}
 		else if (wParam == VK_DOWN) {
 			rDir = 1; // clockwise
 		}
@@ -206,9 +209,13 @@ void demo() {
 	{
 		glRotatef(0.1, 1.0, 1.0, 1.0);
 	}
-	else
+	else if (rDir == -1)
 	{
 		glRotatef(-0.1, 1.0, 1.0, 1.0);
+	}
+	else
+	{
+		glRotatef(0.0, 1.0, 1.0, 1.0);
 	}
 
 	glColor3f(0, 0, 1);
