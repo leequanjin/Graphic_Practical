@@ -1,34 +1,108 @@
-#define _USE_MATH_DEFINES
+﻿#define _USE_MATH_DEFINES
 #include <math.h>
 #include <Windows.h>
 #include <gl/GL.h>
 #include <gl/GLU.h>
+#include <stdio.h>
 
 #pragma comment (lib, "OpenGL32.lib")
 
-#define WINDOW_TITLE "OpenGL Window"
+#define WINDOW_TITLE "OpenGL Window  [Mode: CAMERA]"
+
+// ----- Input Modes -----
+enum InputMode { MODE_CAM = 1, MODE_CHAR = 2, MODE_RIG = 3 };
+int g_mode = MODE_CAM;
+
+// ---- Rig (per-joint control) ----
+enum RigJoint {
+	J_SPINE = 0,          // torso base
+	J_NECK,               // neck/head
+	J_SHOULDER_L, J_ELBOW_L, J_WRIST_L,
+	J_SHOULDER_R, J_ELBOW_R, J_WRIST_R,
+	J_HIP_L, J_KNEE_L, J_ANKLE_L,
+	J_HIP_R, J_KNEE_R, J_ANKLE_R,
+	J_MAX
+};
+
+// gJ[joint][axis], axis: 0=X (pitch), 1=Y (yaw), 2=Z (roll)
+float gJ[J_MAX][3] = { 0 };
+
+int   g_selJoint = J_SHOULDER_L;
+int   g_selAxis = 0;         // 0=X,1=Y,2=Z
+float g_rigStep = 2.0f;
+
+static inline const char* jointName(int j) {
+	switch (j) {
+	case J_SPINE:      return "Spine";
+	case J_NECK:       return "Neck/Head";
+	case J_SHOULDER_L: return "Shoulder L";
+	case J_ELBOW_L:    return "Elbow L";
+	case J_WRIST_L:    return "Wrist L";
+	case J_SHOULDER_R: return "Shoulder R";
+	case J_ELBOW_R:    return "Elbow R";
+	case J_WRIST_R:    return "Wrist R";
+	case J_HIP_L:      return "Hip L";
+	case J_KNEE_L:     return "Knee L";
+	case J_ANKLE_L:    return "Ankle L";
+	case J_HIP_R:      return "Hip R";
+	case J_KNEE_R:     return "Knee R";
+	case J_ANKLE_R:    return "Ankle R";
+	default:           return "?";
+	}
+}
+static inline char axisName(int a) { return a == 0 ? 'X' : (a == 1 ? 'Y' : 'Z'); }
+
+// Apply the selected joint’s full XYZ rotation to the current matrix
+static inline void applyJointRot(int j) {
+	glRotatef(gJ[j][0], 1, 0, 0); // X
+	glRotatef(gJ[j][1], 0, 1, 0); // Y
+	glRotatef(gJ[j][2], 0, 0, 1); // Z
+}
+
+// --- Window handle so we can change the title ---
+HWND g_hWnd = nullptr;
+
+// --- Bitmap font (wglUseFontBitmaps) ---
+GLuint g_fontBase = 0;
+HFONT  g_font = nullptr;
+
+// Arrow key states (for smooth, held-down movement)
+bool g_keyUp = false, g_keyDown = false, g_keyLeft = false, g_keyRight = false;
 
 int qNo = 1;
 
 int noOfSides = 30; // for circle and cylinder
 
 // light parameters
-float lightX = 0.0, lightY = 0.0, lightZ = 0.0, moveSpeed = 0.1; // light position
+float lightX = 8.0f, lightY = 10.0f, lightZ = 8.0f; // default: top-right-front
+float lightMoveSpeed = 1.0f;
 bool isLightOn = true;
+
+bool  fillOn = true;      // toggle GL_LIGHT1 (your “sun”)
+float ambientLevel = 0.6f; // global ambient intensity (0..1)
+
+// Light tuning
+float fillIntensity = 0.35f;             // scales GL_LIGHT1
+GLfloat fillColor[4] = { 1.f, 1.f, 1.f, 1.0f }; // start grey
+
+// ---- Light gizmos (visible "suns") ----
+bool  showSuns = true;
+float sunSizeFill = 0.6f;
+float sunSizeKey = 0.8f;
 
 // projection parameters
 float PNear = 1.0, PFar = 100.0;
 bool isOrtho = false, isPerspective = true;
 
-float camX = 0.f, camY = 0.f, camZ = 25.f; // camera position
+float camX = 0.f, camY = 0.f, camZ = 50.f; // camera position
 float camRotX = 10.f, camRotY = -20.f, camRotZ = 0.f; // camera rotation
-float camMoveSpeed = 0.5f;
+float camMoveSpeed = 0.2f;
 float camRotSpeed = 2.0f;
 
 // human position
 float hx = 0.f, hy = 0.f, hz = 0.f;
 float walkAnimSpeed = 0.2f; // speed of swing
-float humanSpeed = 0.01f; // speed of movement
+float humanSpeed = 0.02f; // speed of movement
 
 // walk cycle
 float walkPhase = 0.f;       // angle in degrees
@@ -76,6 +150,15 @@ inline void useWood(float r = 0.45f, float g = 0.28f, float b = 0.12f) {
 	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.f);
 }
+
+inline void useSkin(float r = 0.90f, float g = 0.76f, float b = 0.66f) {
+	GLfloat diff[4] = { r, g, b, 1.f };
+	GLfloat spec[4] = { 0.15f, 0.12f, 0.10f, 1.f };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diff);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16.f);
+}
+
 
 struct HumanDims {
 	float unit = 1.f; // base unit
@@ -125,68 +208,143 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		PostQuitMessage(0);
 		break;
 
-	case WM_KEYDOWN:
-		if (wParam == VK_ESCAPE) {
-			PostQuitMessage(0);
-		}
-		else if (wParam == '1') qNo = 1;
-		else if (wParam == 'O') {
-			isOrtho = true;
-			isPerspective = false;
-		}
-		else if (wParam == 'P') {
-			isOrtho = false;
-			isPerspective = true;
-		}
-		// Camera movement
-		else if (wParam == VK_UP)    camY += camMoveSpeed;
-		else if (wParam == VK_DOWN)  camY -= camMoveSpeed;
-		else if (wParam == VK_LEFT)  camX -= camMoveSpeed;
-		else if (wParam == VK_RIGHT) camX += camMoveSpeed;
-		else if (wParam == VK_PRIOR) camZ -= camMoveSpeed; // PageUp
-		else if (wParam == VK_NEXT)  camZ += camMoveSpeed; // PageDown
+	case WM_KEYDOWN: {
+		if (wParam == VK_ESCAPE) { PostQuitMessage(0); break; }
 
-		// Camera rotation
-		else if (wParam == 'W') camRotX += camRotSpeed;
-		else if (wParam == 'S') camRotX -= camRotSpeed;
-		else if (wParam == 'A') camRotY += camRotSpeed;
-		else if (wParam == 'D') camRotY -= camRotSpeed;
-		else if (wParam == 'Q') camRotZ += camRotSpeed;
-		else if (wParam == 'E') camRotZ -= camRotSpeed;
+		// ---- Mode switching ----
+		else if (wParam == '1') {
+			g_mode = MODE_CAM;
+			if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: CAMERA]");
+		}
+		else if (wParam == '2') {
+			g_mode = MODE_CHAR;
+			if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: CHARACTER]");
+		}
+		else if (wParam == '3') {
+			g_mode = MODE_RIG;
+			if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: RIG]");
+			break;
+		}
 
-		// Light position
-		else if (wParam == 'T') lightY += moveSpeed; // move light up
-		else if (wParam == 'G') lightY -= moveSpeed; // move light down
-		else if (wParam == 'F') lightX -= moveSpeed; // move light left
-		else if (wParam == 'H') lightX += moveSpeed; // move light right
-		else if (wParam == 'R') lightZ -= moveSpeed; // move light forward
-		else if (wParam == 'Y') lightZ += moveSpeed; // move light backward
 
-		// Armor and Weapon
-		else if (wParam == 'U') { g_armorOn = !g_armorOn; }
-		else if (wParam == VK_TAB) { weaponType = 1 - weaponType; }
+		// ---- Projection toggles (unchanged) ----
+		if (wParam == 'O') { isOrtho = true;  isPerspective = false; break; }
+		if (wParam == 'P') { isOrtho = false; isPerspective = true;  break; }
 
-		// Walking controls
-		else if (wParam == 'I') { // forward
-			walkDirX = 0.f; walkDirZ = -1.f;
-			isWalking = true;
+		// ---- Camera rotation (always available) ----
+		if (wParam == 'W') { camRotX += camRotSpeed; break; }
+		if (wParam == 'S') { camRotX -= camRotSpeed; break; }
+		if (wParam == 'A') { camRotY += camRotSpeed; break; }
+		if (wParam == 'D') { camRotY -= camRotSpeed; break; }
+		if (wParam == 'Q') { camRotZ += camRotSpeed; break; }
+		if (wParam == 'E') { camRotZ -= camRotSpeed; break; }
+
+		// ---- Armor / weapon (unchanged) ----
+		if (wParam == 'U') { g_armorOn = !g_armorOn; break; }
+		if (wParam == VK_TAB) { weaponType = 1 - weaponType; break; }
+
+		// ---- Character quick stop ----
+		if (wParam == VK_SPACE) { isWalking = false; break; }
+
+		// ---- PageUp/PageDown for camera Z (works in any mode) ----
+		if (wParam == VK_PRIOR) { camZ -= camMoveSpeed * 5; break; } // PageUp
+		if (wParam == VK_NEXT) { camZ += camMoveSpeed * 5; break; } // PageDown
+
+		// --- RIG MODE: per-joint controls ---
+		if (g_mode == MODE_RIG) {
+			// Joint selection
+			if (wParam == VK_OEM_4) { // '[' prev joint
+				g_selJoint = (g_selJoint - 1 + J_MAX) % J_MAX; break;
+			}
+			if (wParam == VK_OEM_6) { // ']' next joint
+				g_selJoint = (g_selJoint + 1) % J_MAX; break;
+			}
+
+			// Axis selection
+			if (wParam == 'X') { g_selAxis = 0; break; }
+			if (wParam == 'Y') { g_selAxis = 1; break; }
+			if (wParam == 'Z') { g_selAxis = 2; break; }
+			if (wParam == VK_OEM_COMMA) { // ',' prev axis
+				g_selAxis = (g_selAxis + 2) % 3; break;
+			}
+			if (wParam == VK_OEM_PERIOD) { // '.' next axis
+				g_selAxis = (g_selAxis + 1) % 3; break;
+			}
+
+			// Bend on the selected axis — all 4 arrow directions
+			if (wParam == VK_LEFT) { gJ[g_selJoint][g_selAxis] -= g_rigStep; break; }
+			if (wParam == VK_RIGHT) { gJ[g_selJoint][g_selAxis] += g_rigStep; break; }
+			if (wParam == VK_UP) { gJ[g_selJoint][g_selAxis] += g_rigStep; break; }
+			if (wParam == VK_DOWN) { gJ[g_selJoint][g_selAxis] -= g_rigStep; break; }
+
+			// Step size
+			if (wParam == VK_OEM_MINUS) { g_rigStep = max(0.1f, g_rigStep - 0.5f); break; }
+			if (wParam == VK_OEM_PLUS) { g_rigStep += 0.5f; break; }
+
+			// Reset: current axis, current joint, or all
+			if (wParam == '8') { gJ[g_selJoint][g_selAxis] = 0.f; break; }      // reset axis
+			if (wParam == '9') { gJ[g_selJoint][0] = gJ[g_selJoint][1] = gJ[g_selJoint][2] = 0.f; break; }
+			if (wParam == '0') {
+				for (int j = 0; j < J_MAX; ++j) gJ[j][0] = gJ[j][1] = gJ[j][2] = 0.f;
+				break;
+			}
 		}
-		else if (wParam == 'K') { // backward
-			walkDirX = 0.f; walkDirZ = 1.f;
-			isWalking = true;
+
+		// ---- Light position (CAMERA mode only) ----
+		if (g_mode == MODE_CAM) {
+			if (wParam == 'T') { lightY += lightMoveSpeed; break; }
+			if (wParam == 'G') { lightY -= lightMoveSpeed; break; }
+			if (wParam == 'F') { lightX -= lightMoveSpeed; break; }
+			if (wParam == 'H') { lightX += lightMoveSpeed; break; }
+			if (wParam == 'R') { lightZ -= lightMoveSpeed; break; }
+			if (wParam == 'Y') { lightZ += lightMoveSpeed; break; }
 		}
-		else if (wParam == 'J') { // left
-			walkDirX = -1.f; walkDirZ = 0.f;
-			isWalking = true;
+
+		// Toggle fill light (GL_LIGHT1)
+		if (wParam == 'L') { fillOn = !fillOn; break; }
+
+		// Ambient down/up
+		if (wParam == 'J') { ambientLevel = max(0.0f, ambientLevel - 0.05f); break; }
+		if (wParam == 'K') { ambientLevel = min(1.0f, ambientLevel + 0.05f); break; }
+
+
+		if (wParam == VK_OEM_PLUS) { fillIntensity = min(2.0f, fillIntensity + 0.05f); break; }
+		if (wParam == VK_OEM_MINUS) { fillIntensity = max(0.0f, fillIntensity - 0.05f); break; }
+		if (wParam == 'C') { // cycle fill color: white -> warm -> cool
+			static int idx = 0;
+			const float presets[][3] = { {1,1,1}, {1.0f,0.85f,0.65f}, {0.75f,0.85f,1.0f} };
+			idx = (idx + 1) % 3;
+			fillColor[0] = presets[idx][0]; fillColor[1] = presets[idx][1]; fillColor[2] = presets[idx][2];
+			break;
 		}
-		else if (wParam == 'L') { // right
-			walkDirX = 1.f; walkDirZ = 0.f;
-			isWalking = true;
+
+		// Toggle and tweak the visible suns
+		if (wParam == 'B') { showSuns = !showSuns; break; }          // show/hide
+		if (wParam == 'N') { sunSizeFill = max(0.1f, sunSizeFill - 0.1f); break; } // smaller fill sun
+		if (wParam == 'M') { sunSizeFill += 0.1f; break; }                          // bigger  fill sun
+
+
+		// ---- Arrow keys: set key state true (both modes use them) ----
+		// ---- Arrow keys for CAMERA/CHAR only (rig mode consumes them above) ----
+		if (g_mode != MODE_RIG) {
+			if (wParam == VK_UP) { g_keyUp = true;    break; }
+			if (wParam == VK_DOWN) { g_keyDown = true;  break; }
+			if (wParam == VK_LEFT) { g_keyLeft = true;  break; }
+			if (wParam == VK_RIGHT) { g_keyRight = true; break; }
 		}
-		else if (wParam == VK_SPACE) { // stop walking
-			isWalking = false;
+
+
+		break;
+	}
+	case WM_KEYUP: {
+		if (g_mode != MODE_RIG) {
+			if (wParam == VK_UP)    g_keyUp = false;
+			if (wParam == VK_DOWN)  g_keyDown = false;
+			if (wParam == VK_LEFT)  g_keyLeft = false;
+			if (wParam == VK_RIGHT) g_keyRight = false;
 		}
 		break;
+	}
 
 	default:
 		break;
@@ -228,8 +386,161 @@ bool initPixelFormat(HDC hdc)
 }
 //--------------------------------------------------------------------
 
+// Build an OpenGL bitmap font from the current HDC
+void BuildFont(HDC hdc, int height = 16, const char* face = "Consolas") {
+	if (g_fontBase) return; // already built
+	g_fontBase = glGenLists(96);
+
+	// Create a Windows font
+	g_font = CreateFontA(
+		height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+		ANSI_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+		FF_DONTCARE | DEFAULT_PITCH, face
+	);
+
+	SelectObject(hdc, g_font);
+	// Build display lists for ASCII 32..127
+	wglUseFontBitmapsA(hdc, 32, 96, g_fontBase);
+}
+
+// Clean up font (optional)
+void KillFont() {
+	if (g_fontBase) {
+		glDeleteLists(g_fontBase, 96);
+		g_fontBase = 0;
+	}
+	if (g_font) {
+		DeleteObject(g_font);
+		g_font = nullptr;
+	}
+}
+
+// Print text at current raster pos
+void glPrint(const char* fmt, ...) {
+	if (!g_fontBase) return;
+	char text[512];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(text, sizeof(text), fmt, ap);
+	va_end(ap);
+
+	glPushAttrib(GL_LIST_BIT);
+	glListBase(g_fontBase - 32);
+	glCallLists((GLsizei)strlen(text), GL_UNSIGNED_BYTE, text);
+	glPopAttrib();
+}
+
+// 2D overlay HUD. Call this at the END of your 3D render (in demo()).
+void drawHUD() {
+	if (!g_hWnd) return;
+
+	RECT rc; GetClientRect(g_hWnd, &rc);
+	int w = rc.right - rc.left;
+	int h = rc.bottom - rc.top;
+
+	// Save states
+	glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT);
+	glDisable(GL_LIGHTING);
+	glDisable(GL_DEPTH_TEST);
+
+	// Setup orthographic 2D
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	glOrtho(0, w, 0, h, -1, 1);
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	// Text color
+	glColor3f(1.f, 1.f, 1.f);
+
+	// Top-left block
+	glRasterPos2i(10, h - 20);
+	const char* modeName =
+		(g_mode == MODE_CAM) ? "CAMERA" :
+		(g_mode == MODE_CHAR) ? "CHARACTER" : "RIG";
+	glPrint("Mode: %s", modeName);
+
+	glRasterPos2i(10, h - 40);
+	glPrint("Cam Pos: (%.2f, %.2f, %.2f)  Rot: (%.1f, %.1f, %.1f)",
+		camX, camY, camZ, camRotX, camRotY, camRotZ);
+
+	glRasterPos2i(10, h - 60);
+	glPrint("Char Pos: (%.2f, %.2f, %.2f)  Angle: %.1f  Walking: %s",
+		hx, hy, hz, humanAngle, isWalking ? "YES" : "NO");
+
+	if (g_mode == MODE_CAM) {
+		glRasterPos2i(10, h - 80);
+		glPrint("Fill light pos: (%.2f, %.2f, %.2f)  Move: F/H=X  T/G=Y  R/Y=Z",
+			lightX, lightY, lightZ);
+
+		glRasterPos2i(10, h - 100);
+		glPrint("Fill: %s  Intensity: +/- -> %.2f  Tone: C to cycle  Color=(%.2f,%.2f,%.2f)",
+			fillOn ? "ON (L toggles)" : "OFF (L toggles)",
+			fillIntensity, fillColor[0], fillColor[1], fillColor[2]);
+
+		glRasterPos2i(10, h - 120);
+		glPrint("Ambient: %.2f  Adjust: J-/K+", ambientLevel);
+	}
+
+	if (g_mode == MODE_RIG) {
+		glRasterPos2i(10, h - 80);
+		glPrint("RIG: Joint=[%s]  Axis=%c  Angle=%.1f deg  Step=%.1f",
+			jointName(g_selJoint), axisName(g_selAxis), gJ[g_selJoint][g_selAxis], g_rigStep);
+		glRasterPos2i(10, h - 100);
+		glPrint("[/]=joint  ,/.=axis  X/Y/Z=pick axis  Arrows=rotate  -=/+=step  8=reset axis  9=reset joint  0=reset all");
+	}
+
+	
+
+
+	// Restore matrices
+	glPopMatrix(); // model
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+
+	glPopAttrib();
+}
+
+
 void setWire(bool on) {
 	glPolygonMode(GL_FRONT_AND_BACK, on ? GL_LINE : GL_FILL);
+}
+
+void handleInputPerFrame() {
+	// Mode-specific handling for arrow keys
+	if (g_mode == MODE_CAM) {
+		// Camera movement with arrows, Z with PageUp/PageDown (kept in WM_KEYDOWN too if you like)
+		if (g_keyUp)    camY += camMoveSpeed;
+		if (g_keyDown)  camY -= camMoveSpeed;
+		if (g_keyLeft)  camX -= camMoveSpeed;
+		if (g_keyRight) camX += camMoveSpeed;
+		// Z moves are still available via PageUp/PageDown in WM_KEYDOWN
+	}
+	else if (g_mode == MODE_CHAR) {
+		float dx = 0.f, dz = 0.f;
+		if (g_keyUp)    dz -= 1.f;   // forward (negative Z in your world)
+		if (g_keyDown)  dz += 1.f;   // backward
+		if (g_keyLeft)  dx -= 1.f;   // left
+		if (g_keyRight) dx += 1.f;   // right
+
+		if (dx != 0.f || dz != 0.f) {
+			// normalise diagonal movement
+			float len = sqrtf(dx * dx + dz * dz);
+			dx /= len; dz /= len;
+
+			walkDirX = dx;
+			walkDirZ = dz;
+			isWalking = true;  // walk while any arrow key is held
+		}
+		else {
+			// no arrows held
+			isWalking = false;
+		}
+	}
 }
 
 void drawSphere(double r) {
@@ -253,6 +564,22 @@ void drawYCylinder(double br, double tr, float h) {
 	glRotatef(90.0f, 1.f, 0.f, 0.f);
 	drawCylinder(br, tr, h);
 	glPopMatrix();
+}
+
+void drawDisk(double inr, double outr) {
+	GLUquadricObj* disk = NULL;	// Create a new quadric object pointer
+	disk = gluNewQuadric();		// Create a new quadric object in the memory
+	gluQuadricDrawStyle(disk, GLU_LINE); // Set the draw style to line
+	gluDisk(disk, inr, outr, 30, 30);	// Draw a disk with inner radius inr, outer radius outr, 30 slices and loops
+	gluDeleteQuadric(disk);	// Delete the quadric object from the memory	
+}
+
+void drawPartialDisk(double inr, double outr, double startAngle, double sweepAngle) {
+	GLUquadricObj* disk = NULL;	// Create a new quadric object pointer
+	disk = gluNewQuadric();		// Create a new quadric object in the memory
+	gluQuadricDrawStyle(disk, GLU_LINE); // Set the draw style to line
+	gluPartialDisk(disk, inr, outr, 30, 30, startAngle, sweepAngle); // Draw a partial disk with inner radius inr, outer radius outr, 30 slices and loops, starting angle startAngle and sweep angle sweepAngle
+	gluDeleteQuadric(disk);	// Delete the quadric object from the memory	
 }
 
 void drawBlock(double w, double h, double d) {
@@ -384,37 +711,173 @@ void drawTrapezoidBlock(double bottomW, double topW, double h, double bottomD, d
 	glEnd();
 }
 
-// ---------- Helmet + plume ----------
+// --- Helper: dome (hemisphere) ---
+void drawHemisphere(float r, int slices = 30, int stacks = 15) {
+	GLUquadric* quad = gluNewQuadric();
+	gluQuadricNormals(quad, GLU_SMOOTH);
+	for (int i = 0; i < stacks; i++) {
+		float phi1 = (M_PI / 2.0f) * i / stacks;
+		float phi2 = (M_PI / 2.0f) * (i + 1) / stacks;
+		glBegin(GL_TRIANGLE_STRIP);
+		for (int j = 0; j <= slices; j++) {
+			float theta = 2.0f * M_PI * j / slices;
+			float x1 = cos(theta) * cos(phi1);
+			float y1 = sin(phi1);
+			float z1 = sin(theta) * cos(phi1);
+			float x2 = cos(theta) * cos(phi2);
+			float y2 = sin(phi2);
+			float z2 = sin(theta) * cos(phi2);
+			glNormal3f(x1, y1, z1);
+			glVertex3f(r * x1, r * y1, r * z1);
+			glNormal3f(x2, y2, z2);
+			glVertex3f(r * x2, r * y2, r * z2);
+		}
+		glEnd();
+	}
+	gluDeleteQuadric(quad);
+}
+
+void drawUnlitSphere(float x, float y, float z, float r, float cr, float cg, float cb) {
+	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LIGHTING_BIT);
+	glDisable(GL_LIGHTING);
+	glColor3f(cr, cg, cb);
+	glPushMatrix();
+	glTranslatef(x, y, z);
+	drawSphere(r);
+	glPopMatrix();
+	glPopAttrib();
+}
+
+void drawLine(const float a[3], const float b[3]) {
+	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LIGHTING_BIT);
+	glDisable(GL_LIGHTING);
+	glColor3f(1.0f, 1.0f, 1.0f);
+	glBegin(GL_LINES);
+	glVertex3f(a[0], a[1], a[2]);
+	glVertex3f(b[0], b[1], b[2]);
+	glEnd();
+	glPopAttrib();
+}
+
+
+// --- Helper: feather plume ---
+void drawFeather(float h = 1.5f, float w = 0.1f) {
+	useCloth(0.9f, 0.1f, 0.1f); // red plume
+	glPushMatrix();
+	glScalef(w, h, w);
+	drawSphere(1.0);  // stretched sphere = feather
+	glPopMatrix();
+}
+
+// Curved cheek wrap around back & sides of the head
+void drawCheekWrap(const HumanDims& d) {
+	useMetal();
+
+	// Vertical position of the wrap (a bit below head center)
+	const float y = -d.headR * 0.20f;
+
+	// Radius just outside the head to avoid z-fighting with the dome
+	const float radius = d.headR * 1.06f;
+
+	// Arc that covers back and both cheeks, leaving the front open
+	// Front is +Z in this scene; back is -Z. We leave a frontal gap.
+	const float startDeg = 30.f;   // near right-front going toward back
+	const float endDeg = 330.f;   // near left-front
+	const int   segments = 14;
+
+	// Plate sizing
+	const float arcRad = (endDeg - startDeg) * (float)M_PI / 180.f;
+	const float segArc = arcRad / segments;
+	const float segW = radius * segArc * 1.15f;   // width along tangent
+	const float segH = d.headR * 0.85f;          // vertical size
+	const float segD0 = d.headR * 0.28f;          // radial thickness (bottom)
+	const float segD1 = segD0 * 0.78f;            // slight taper
+	const float segW0 = segW * 1.05f;             // slight width taper
+	const float segW1 = segW * 0.90f;
+
+	for (int i = 0; i < segments; ++i) {
+		float t = (i + 0.5f) / segments;                       // center of segment
+		float thetaDeg = startDeg + (endDeg - startDeg) * t;
+		float theta = thetaDeg * (float)M_PI / 180.f;
+
+		// Circle on XZ plane, Y up. Use (x=sin, z=cos) so theta=0 points to +Z (front).
+		float cx = radius * sinf(theta);
+		float cz = radius * cosf(theta);
+
+		glPushMatrix();
+		// Place each segment around the head ring
+		glTranslatef(cx, y, cz);
+
+		// Face each plate outward (local +Z points outward after this rotate)
+		glRotatef(thetaDeg, 0.f, 1.f, 0.f);
+
+		// Add a tiny downward cant so plates "hug" the cheekline
+		glRotatef(8.f, 1.f, 0.f, 0.f);
+
+		// Slight outward nudge to ensure no z-fighting with dome
+		glTranslatef(0.f, 0.f, Z_EPS);
+
+		// Trapezoid whose depth is radial; width runs along tangent
+		drawTrapezoidBlock(
+			/*bottomW*/ segW0, /*topW*/ segW1,
+			/*h*/       segH,
+			/*bottomD*/ segD0, /*topD*/ segD1
+		);
+		glPopMatrix();
+	}
+}
+
+
+// --- New Helmet ---
 void drawHelmet(const HumanDims& d) {
-	// We are already at world origin in drawHuman, so compute absolute Y
-	float pelvisHalf = d.pelvisH * 0.5f;
-	float headCenterY = pelvisHalf + d.chestH + d.neckH + d.headR;
+	// same neck pivot as head
+	const float neckTopY = d.pelvisH * 0.5f + d.chestH + d.neckH;
 
-	useMetal(); // silver
 	glPushMatrix();
-	glTranslatef(0.f, headCenterY, 0.f);
+	glTranslatef(0.f, neckTopY, 0.f);          // neck pivot
+	if (g_mode == MODE_RIG) applyJointRot(J_NECK); // inherit head rotation
+	glTranslatef(0.f, d.headR, 0.f);           // now we're at head center
 
-	// bowl
-	float bowlH = d.headR * 0.7f;
+	useMetal();
+
+	// ---- Dome geometry (relative to head center) ----
+	const float domeR = d.headR * 1.20f;    // hemisphere radius
+	const float domeBaseY = d.headR * 0.20f;    // base ring above head center
+	const float domeTopY = domeBaseY + domeR;
+
+	// Dome cap (hemisphere sits above base ring)
 	glPushMatrix();
-	glTranslatef(0.f, d.headR * 0.15f, 0.f);
-	drawYCylinder(d.headR * 1.05f, d.headR * 1.05f, bowlH);
+	glTranslatef(0.f, domeBaseY, 0.f);
+	drawHemisphere(domeR);
 	glPopMatrix();
 
-	// brim
+	// Cheek wrap (expects origin at head center)
+	drawCheekWrap(d);
+
+	// Rear neck guard (designed around head center)
 	glPushMatrix();
-	glTranslatef(0.f, d.headR * 0.5f, 0.f);
-	drawBlock(d.headR * 2.1f, d.headR * 0.15f, d.headR * 2.1f);
+	glTranslatef(0.f, -d.headR * 1.0f, -d.headR * 0.6f);
+	glRotatef(-20.f, 1, 0, 0);
+	drawTrapezoidBlock(d.headR * 2.0f, d.headR * 1.4f, d.headR * 0.6f,
+		d.headR * 0.5f, d.headR * 0.3f);
 	glPopMatrix();
 
-	// plume (two cones)
-	glPushMatrix();
-		glTranslatef(0.f, d.headR * 0.95f, 0.f);
-		glRotatef(-18.f, 0, 0, 1);
-		useCloth(0.85f, 0.15f, 0.15f);
-		drawSphere(0.1);
-		glRotatef(36.f, 0, 0, 1);
-	glPopMatrix();
+	// Center plume + socket (relative to dome top)
+	{
+		const float sockH = d.headR * 1.f;
+		const float socketBaseY = domeTopY - sockH * 0.05f; // tiny sink
+
+		const float plumeH = d.headR * 1.f;
+		const float plumeR0 = d.headR * 0.12f;
+		const float tiltBackDeg = -10.f;
+
+		glPushMatrix();
+		glTranslatef(0.f, socketBaseY, 0.f);
+		glRotatef(tiltBackDeg, 1.f, 0.f, 0.f);
+		glTranslatef(0.f, sockH, 0.f);
+		drawFeather(/*h*/ plumeH, /*w*/ plumeR0);
+		glPopMatrix();
+	}
 
 	glPopMatrix();
 }
@@ -438,7 +901,6 @@ void drawShoulderPadAt(const HumanDims& d, bool left) {
 	drawShoulderPadPiece(d.shoulderW * 0.9, d.chestH * 0.14f, d.chestD * 0.9);
 	glPopMatrix();
 }
-
 
 // ---------- Chest/back plate + belt ----------
 void drawCuirass(const HumanDims& d) {
@@ -468,7 +930,6 @@ void drawCuirass(const HumanDims& d) {
 	glPopMatrix();
 }
 
-
 // ---------- Layered skirt / tassets (front/back + sides) ----------
 void drawSkirtArmor(const HumanDims& d) {
 	const float waistY = d.pelvisH * 0.5f;
@@ -486,25 +947,7 @@ void drawSkirtArmor(const HumanDims& d) {
 	drawTrapezoidBlock(d.pelvisW * 0.90f, d.pelvisW * 0.70f,
 		d.upperLegL * 0.70f, d.pelvisD * 0.02f, d.pelvisD * 0.02f);
 	glPopMatrix();
-
-	// metal side tassets
-	useMetal();
-	for (int i = 0; i < 2; ++i) {
-		float side = (i == 0) ? -1.f : 1.f;
-		glPushMatrix();
-		glTranslatef(side * (d.pelvisW * 0.55f + Z_EPS), waistY - d.pelvisH * 0.20f, 0.f);
-		glRotatef(side * 20.f, 0, 1, 0);
-		drawTrapezoidBlock(d.pelvisW * 0.10f, d.pelvisW * 0.1f,
-			d.upperLegL * 0.55f, d.pelvisD * 0.85f, d.pelvisD * 0.70f);
-			glPushMatrix();
-				glRotatef(side * 20.f, 0, 1, 0);
-				drawTrapezoidBlock(d.pelvisW * 0.10f, d.pelvisW * 0.1f,
-					d.upperLegL * 0.55f, d.pelvisD * 0.85f, d.pelvisD * 0.70f);
-			glPopMatrix();
-		glPopMatrix();
-	}
 }
-
 
 // ---------- Forearm bracer (call inside right/left arm local space after elbow) ----------
 void drawForearmBracer(const HumanDims& d) {
@@ -520,8 +963,8 @@ void drawShinGreave(const HumanDims& d) {
 	useMetal();
 	// shin tube
 	glPushMatrix();
-	glTranslatef(0.f, -d.lowerLegL * 0.4f, 0.f);
-	drawYCylinder(d.legLimbR * 1.10f, d.legLimbR * 1.05f, d.lowerLegL * 0.8f);
+	glTranslatef(0.f, -d.lowerLegL * 0.35f, 0.f);
+	drawYCylinder(d.legLimbR * 1.15f, d.legLimbR * 1.25f, d.lowerLegL * 0.8f);
 	glPopMatrix();
 	// knee cap
 	glPushMatrix();
@@ -548,26 +991,12 @@ void drawUpperArmPlate(const HumanDims& d) {
 	glPopMatrix();
 }
 
-void drawThighPlate(const HumanDims& d) {
-	useMetal();
-	glPushMatrix(); // upper leg local
-	glTranslatef(0.f, -d.upperLegL * 0.35f, d.legLimbR * 0.3f);
-	drawTrapezoidBlock(d.legLimbR * 2.2f, d.legLimbR * 1.9f,
-		d.upperLegL * 0.7f, d.legLimbR * 1.6f, d.legLimbR * 1.8f);
-		glPushMatrix();
-			glRotatef(90.f, 1, 0, 0);
-			drawCylinder(d.legLimbR * 1.2f, d.legLimbR * 1.0f, d.upperLegL * 0.4f);
-			drawCylinder(d.legLimbR * 1.0f, d.legLimbR * 0.8f, d.upperLegL * 0.6f);
-			drawCylinder(d.legLimbR * 0.8f, d.legLimbR * 0.6f, d.upperLegL * 0.8f);
-		glPopMatrix();
-	glPopMatrix();
-}
 void drawSabaton(const HumanDims& d) {
 	useMetal();
 	glPushMatrix();
 	glTranslatef(0.f, 0.f, d.footD * 0.35f);
-	drawTrapezoidBlock(d.footW * 1.1f, d.footW * 0.7f,
-		d.footH * 0.9f, d.footD * 1.0f, d.footD * 0.7f);
+	drawTrapezoidBlock(d.footW * 1.1f, d.footW * 1.1f,
+		d.footH * 1.2f, d.footD * 1.0f, d.footD * 1.1f);
 	glPopMatrix();
 }
 
@@ -586,6 +1015,7 @@ void drawLimbSegment(float br, float tr, float len) {
 void drawTorso(const HumanDims& d) {
 	// pelvis is centered at current origin
 	// bottomW > topW for pelvis taper
+	useNeutral();
 	drawTrapezoidBlock(
 		d.pelvisW,                 // bottom width
 		d.pelvisW * 0.7f,          // top width (slimmer waist)
@@ -599,6 +1029,7 @@ void drawTorso(const HumanDims& d) {
 	glPushMatrix();
 	glTranslatef(0.f, chestCenterY, 0.f);
 	// chest tapers opposite: top wider than bottom (shoulders broader)
+	useNeutral();
 	drawTrapezoidBlock(
 		d.shoulderW * 0.7f,    // bottom width (narrower near waist)
 		d.shoulderW,           // top width (broad shoulders)
@@ -612,18 +1043,79 @@ void drawTorso(const HumanDims& d) {
 	float neckCenterY = d.chestH + (d.pelvisH + d.neckH) * 0.5f;
 	glPushMatrix();
 	glTranslatef(0.f, neckCenterY, 0.f);
+	useSkin();
 	drawLimbSegment(d.neckR, d.neckR, d.neckH);
 	glPopMatrix();
 }
 
-void drawHead(const HumanDims& d) {
-	// head center = pelvis_full + chest_full + neck_full + head_radius
-	float headCenterY = d.chestH + d.neckH + d.headR + (d.pelvisH * 0.5f) - 0.1f;
+// Simple eyes: two white spheres with small dark pupils, slightly proud of the face
+void drawEyes(const HumanDims& d) {
+	const float R = d.headR;
+	const float eyeR = R * 0.12f;   // white radius
+	const float pupilR = R * 0.04f;   // pupil radius
+	const float eyeOffsetX = R * 0.32f;   // left/right spacing
+	const float eyeOffsetY = R * 0.10f;   // a bit above center
+	const float eyeOffsetZ = R * 0.85f;   // sit on the "front" of the head (+Z)
+
+	// --- white material ---
+	{
+		GLfloat diff[4] = { 0.02f, 0.02f, 0.02f, 1.f };
+		GLfloat spec[4] = { 0.25f, 0.25f, 0.25f, 1.f };
+		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diff);
+		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
+		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.f);
+	}
+
+	// left eye white
 	glPushMatrix();
-	glTranslatef(0.f, headCenterY, 0.f);
-	drawSphere(d.headR);
+	glTranslatef(-eyeOffsetX, eyeOffsetY, eyeOffsetZ + Z_EPS);
+	drawSphere(eyeR);
+	glPopMatrix();
+
+	// right eye white
+	glPushMatrix();
+	glTranslatef(+eyeOffsetX, eyeOffsetY, eyeOffsetZ + Z_EPS);
+	drawSphere(eyeR);
+	glPopMatrix();
+
+	// --- pupil material ---
+	{
+		GLfloat diff[4] = { 0.05f, 0.05f, 0.05f, 1.f };
+		GLfloat spec[4] = { 0.08f, 0.08f, 0.08f, 1.f };
+		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diff);
+		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
+		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.f);
+	}
+
+	// left pupil
+	glPushMatrix();
+	glTranslatef(-eyeOffsetX, eyeOffsetY, eyeOffsetZ + Z_EPS * 2.f);
+	drawSphere(pupilR);
+	glPopMatrix();
+
+	// right pupil
+	glPushMatrix();
+	glTranslatef(+eyeOffsetX, eyeOffsetY, eyeOffsetZ + Z_EPS * 2.f);
+	drawSphere(pupilR);
 	glPopMatrix();
 }
+
+void drawHead(const HumanDims& d) {
+	// pivot at the neck top (base of the head)
+	const float neckTopY = d.pelvisH * 0.5f + d.chestH + d.neckH;
+
+	glPushMatrix();
+	glTranslatef(0.f, neckTopY, 0.f);          // move to neck pivot
+	if (g_mode == MODE_RIG) applyJointRot(J_NECK); // rotate around neck
+	glTranslatef(0.f, d.headR, 0.f);           // move up to head center
+
+	useSkin();
+	drawSphere(d.headR);                       // draw head centered at origin
+	drawEyes(d);
+	glPopMatrix();
+}
+
+
 
 void drawSword(
 	// blade
@@ -717,7 +1209,7 @@ void drawSword(
 		(thick0 + thick1) * 0.5f, thick1);
 	glPopMatrix();
 
-	// fuller (shallow groove) � darker metal, inset to avoid z-fight
+	// fuller (shallow groove) – darker metal, inset to avoid z-fight
 	useMetal(0.65f, 0.67f, 0.72f);
 	float fullerL = midL * 0.75f;
 	glPushMatrix();
@@ -807,19 +1299,37 @@ void drawArm(const HumanDims& d, bool left, float shoulder_rx_deg = 0.f, float e
 	//glRotatef(side * 90.f, 0.f, 0.f, 1.f); // rotate arm out to the side
 
 	// upper arm
-	glRotatef(shoulder_rx_deg, 1.f, 0.f, 0.f);
+	if (g_mode == MODE_RIG) {
+		// shoulder: full XYZ
+		applyJointRot(left ? J_SHOULDER_L : J_SHOULDER_R);
+	}
+	else {
+		glRotatef(shoulder_rx_deg, 1.f, 0.f, 0.f);
+	}
 	if (g_armorOn) drawUpperArmPlate(d);
+	useSkin();
 	drawLimbSegment(d.armLimbR, d.armLimbR, d.upperArmL);
 
 	// forearm + hand
 	glTranslatef(0.f, -d.upperArmL, 0.f);
-	glRotatef(elbow_rx_deg, 1.f, 0.f, 0.f);
+	if (g_mode == MODE_RIG) {
+		// elbow: hinge (use X only)
+		glRotatef(gJ[left ? J_ELBOW_L : J_ELBOW_R][0], 1, 0, 0);
+	}
+	else {
+		glRotatef(elbow_rx_deg, 1.f, 0.f, 0.f);
+	}
 
 	// NEW: forearm bracer that follows elbow rotation
 	if (g_armorOn) drawForearmBracer(d);
-
+	useSkin();
 	drawLimbSegment(d.armLimbR, d.armLimbR, d.forearmL);
-	glTranslatef(0.f, -(d.forearmL + d.handH * 0.5f), 0.f);
+	glTranslatef(0.f, -(d.forearmL), 0.f);
+	// keep the hand centered as before (you had +handH*0.5f later for the block)
+	if (g_mode == MODE_RIG) {
+		applyJointRot(left ? J_WRIST_L : J_WRIST_R);
+	}
+	glTranslatef(0.f, -(d.handH * 0.5f), 0.f);
 	drawBlock(d.handW, d.handH, d.handD);
 
 	if (!left) {
@@ -841,25 +1351,42 @@ void drawLeg(const HumanDims& d, bool left, float hip_rx_deg = 0.f, float knee_r
 	glPushMatrix();
 	glTranslatef(hipX, hipY, 0.f);
 
-	glRotatef(-hip_rx_deg, 1.f, 0.f, 0.f);
-	if (g_armorOn) drawThighPlate(d);
-
+	if (g_mode == MODE_RIG) {
+		applyJointRot(left ? J_HIP_L : J_HIP_R);    // full XYZ
+	}
+	else {
+		glRotatef(-hip_rx_deg, 1.f, 0.f, 0.f);
+	}
+	useNeutral();
 	drawLimbSegment(d.legLimbR, d.legLimbR, d.upperLegL);
 
 	// knee
 	glTranslatef(0.f, -d.upperLegL, 0.f);
-	glRotatef(-knee_rx_deg, 1.f, 0.f, 0.f);
+	if (g_mode == MODE_RIG) {
+		glRotatef(gJ[left ? J_KNEE_L : J_KNEE_R][0], 1, 0, 0);  // hinge X
+	}
+	else {
+		glRotatef(-knee_rx_deg, 1.f, 0.f, 0.f);
+	}
 
-	// NEW: greave + kneecap
+	// NEW: greave
 	if (g_armorOn) drawShinGreave(d);
+	useNeutral();
 
-	drawLimbSegment(d.armLimbR, d.armLimbR, d.lowerLegL);
+	// shin
+	drawLimbSegment(d.legLimbR, d.legLimbR, d.lowerLegL);
 
+	// move to ankle joint (top of foot), apply ankle, then place the foot block
+	glTranslatef(0.f, -d.lowerLegL, 0.f);
+	if (g_mode == MODE_RIG) {
+		applyJointRot(left ? J_ANKLE_L : J_ANKLE_R); // full XYZ
+	}
 
-	// foot
-	glTranslatef(0.f, -(d.lowerLegL + d.footH * 0.5f), d.footD * 0.25f);
-	drawBlock(d.footW, d.footH, d.footD);
+	// foot (drop to foot center and push slightly forward)
+	glTranslatef(0.f, -d.footH * 0.5f, d.footD * 0.25f);
 	if (g_armorOn) drawSabaton(d);
+	useSkin();
+	drawBlock(d.footW, d.footH, d.footD);
 	glPopMatrix();
 }
 
@@ -882,13 +1409,23 @@ void drawHuman(const HumanDims& d, float walkPhaseDeg = 0.f, bool walking = fals
 	// add bobbing while walking
 	float bob = walking ? (sin(walkPhaseDeg * M_PI / 180.0f) * 0.1f) : 0.f;
 	glTranslatef(0.f, bodyLift + bob, 0.f);
+	if (g_mode == MODE_RIG) applyJointRot(J_SPINE);
 
 	// swing angles
-	float swing = walking ? sin(walkPhaseDeg * M_PI / 180.0f) * 30.f : 0.f;
+	// swing angles (for walk)
+	// swing angles (for walk)
+	float swing = walking ? sin(walkPhaseDeg * (float)M_PI / 180.0f) * 30.f : 0.f;
+
+	// These are only used in non-RIG mode; RIG mode ignores them inside drawArm/drawLeg.
+	float shL = -swing, elL = 0.f;
+	float shR = swing, elR = 0.f;
+	float hipL = swing, kneeL = -swing * 0.5f;
+	float hipR = -swing, kneeR = swing * 0.5f;
+
 
 	// Legs
-	drawLeg(d, true, swing, -swing * 0.5f);   // left leg
-	drawLeg(d, false, -swing, swing * 0.5f);  // right leg
+	drawLeg(d, true, hipL, kneeL);   // left leg
+	drawLeg(d, false, hipR, kneeR);   // right leg
 
 	// Torso
 	drawTorso(d);
@@ -902,15 +1439,15 @@ void drawHuman(const HumanDims& d, float walkPhaseDeg = 0.f, bool walking = fals
 		drawShoulderPadAt(d, false);
 	}
 
-	// Arms (opposite swing of legs)
-	drawArm(d, true, -swing, 0.f);   // left arm
-	drawArm(d, false, swing, 0.f);   // right arm
-
 	// Head (slight counter bob if wanted)
 	drawHead(d);
 
 	// NEW: helmet+plume
 	if (g_armorOn) drawHelmet(d);
+
+	// Arms
+	drawArm(d, true, shL, elL);   // left arm
+	drawArm(d, false, shR, elR);   // right arm
 
 	glPopMatrix();
 }
@@ -919,28 +1456,32 @@ void lighting() {
 	if (isLightOn) glEnable(GL_LIGHTING); else glDisable(GL_LIGHTING);
 
 	// global ambient
-	GLfloat globalAmb[4] = { 0.15f, 0.15f, 0.15f, 1.0f };
+	GLfloat globalAmb[4] = { ambientLevel, ambientLevel, ambientLevel, 1.0f };
 	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmb);
 
-	// KEY light � white directional (w = 0)
-	GLfloat keyPos[4] = { -0.4f, 1.0f, 0.6f, 0.0f }; // direction vector
-	GLfloat white[4] = { 1,1,1,1 };
-	GLfloat grey[4] = { 0.35f,0.35f,0.35f,1 };
-	glEnable(GL_LIGHT0);
-	glLightfv(GL_LIGHT0, GL_POSITION, keyPos);
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, white);
-	glLightfv(GL_LIGHT0, GL_SPECULAR, white);
-
-	// FILL light � neutral movable point (w = 1)
+	// FILL (point)
 	GLfloat fillPos[4] = { lightX, lightY, lightZ, 1.0f };
-	GLfloat fillDif[4] = { 0.35f, 0.35f, 0.35f, 1.0f };
-	glEnable(GL_LIGHT1);
-	glLightfv(GL_LIGHT1, GL_POSITION, fillPos);
-	glLightfv(GL_LIGHT1, GL_DIFFUSE, grey);
-	glLightfv(GL_LIGHT1, GL_SPECULAR, grey);
+	GLfloat fillCol[4] = {
+		fillColor[0] * fillIntensity,
+		fillColor[1] * fillIntensity,
+		fillColor[2] * fillIntensity, 1.0f
+	};
+
+	if (fillOn) {
+		glEnable(GL_LIGHT1);
+		glLightfv(GL_LIGHT1, GL_POSITION, fillPos);
+		glLightfv(GL_LIGHT1, GL_DIFFUSE, fillCol);
+		glLightfv(GL_LIGHT1, GL_SPECULAR, fillCol);
+	}
+	else {
+		glDisable(GL_LIGHT1);
+	}
 }
 
 void demo() {
+	// Per-frame keyboard handling for modes
+	handleInputPerFrame();
+
 	//setWire(true);
 	if (isWalking) {
 		walkPhase += walkAnimSpeed;
@@ -972,6 +1513,19 @@ void demo() {
 	glRotatef(camRotY, 0.f, 1.f, 0.f);
 	glRotatef(camRotZ, 0.f, 0.f, 1.f);
 
+	// --- Visible light sources ("suns") ---
+	if (showSuns) {
+		// Fill-light sun at the actual point-light position (GL_LIGHT1)
+		{
+			float a[3] = { 0.f, 0.f, 0.f };
+			float b[3] = { lightX, lightY, lightZ };
+			drawLine(a, b); // line from origin to fill light (optional)
+			// bright-ish color derived from your fill color
+			drawUnlitSphere(lightX, lightY, lightZ, sunSizeFill,
+				fillColor[0], fillColor[1], fillColor[2]);
+		}
+	}
+
 	drawGround();
 	HumanDims d;
 	glPushMatrix();
@@ -980,6 +1534,7 @@ void demo() {
 	drawHuman(d, walkPhase, isWalking);
 	glPopMatrix();
 
+	drawHUD();
 }
 
 void projection() {
@@ -1037,6 +1592,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow)
 	//	Initialize window for OpenGL
 	//--------------------------------
 
+	g_hWnd = hWnd;
+
 	HDC hdc = GetDC(hWnd);
 
 	//	initialize pixel format for the window
@@ -1047,6 +1604,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow)
 
 	//	make context current
 	if (!wglMakeCurrent(hdc, hglrc)) return false;
+
+	BuildFont(hdc, 18, "Consolas"); // or "Courier New" if you prefer
 
 	//--------------------------------
 	//	End initialization
@@ -1074,6 +1633,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow)
 
 	UnregisterClass(WINDOW_TITLE, wc.hInstance);
 
+	KillFont();
 	return true;
 }
 //--------------------------------------------------------------------
