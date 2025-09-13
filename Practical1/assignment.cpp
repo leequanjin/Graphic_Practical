@@ -1048,57 +1048,102 @@ void drawTorso(const HumanDims& d) {
 	glPopMatrix();
 }
 
-// Simple eyes: two white spheres with small dark pupils, slightly proud of the face
+void drawEyebrows(const HumanDims& d) {
+	const float R = d.headR;
+	const float eyeOffX = R * 0.32f;
+	const float eyeOffY = R * 0.10f;
+	const float eyeOffZ = R * 0.85f;
+	const float eyeR = R * 0.12f;
+
+	// eyebrow size and placement
+	const float browW = R * 0.36f;
+	const float browH = R * 0.06f;
+	const float browD = R * 0.10f;
+	const float browY = eyeOffY + eyeR * 0.65f;          // a bit above eye
+	const float browZ = eyeOffZ + eyeR + Z_EPS * 2.f;    // on skin surface
+
+	// dark “hair” material
+	GLfloat diff[4] = { 0.10f, 0.10f, 0.10f, 1.f };
+	GLfloat spec[4] = { 0.05f, 0.05f, 0.05f, 1.f };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diff);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 6.f);
+
+	// Left brow: slight downward tilt toward nose
+	glPushMatrix();
+	glTranslatef(-eyeOffX + R * 0.03f, browY, browZ);
+	glRotatef(-8.f, 0.f, 0.f, 1.f);  // angle toward nose
+	glRotatef(-5.f, 1.f, 0.f, 0.f);  // small pitch
+	drawBlock(browW, browH, browD);
+	glPopMatrix();
+
+	// Right brow: mirror tilt
+	glPushMatrix();
+	glTranslatef(+eyeOffX - R * 0.03f, browY, browZ);
+	glRotatef(+8.f, 0.f, 0.f, 1.f);
+	glRotatef(-5.f, 1.f, 0.f, 0.f);
+	drawBlock(browW, browH, browD);
+	glPopMatrix();
+}
+
 void drawEyes(const HumanDims& d) {
 	const float R = d.headR;
-	const float eyeR = R * 0.12f;   // white radius
+	const float eyeR = R * 0.12f;   // sclera radius
 	const float pupilR = R * 0.04f;   // pupil radius
-	const float eyeOffsetX = R * 0.32f;   // left/right spacing
-	const float eyeOffsetY = R * 0.10f;   // a bit above center
-	const float eyeOffsetZ = R * 0.85f;   // sit on the "front" of the head (+Z)
+	const float eyeOffX = R * 0.32f;   // L/R spacing
+	const float eyeOffY = R * 0.10f;   // a bit above center
+	const float eyeOffZ = R * 0.85f;   // front of head (+Z)
+	const float surfaceZ = eyeOffZ + eyeR; // eye surface along +Z
 
-	// --- white material ---
+	// --- sclera (actually white this time) ---
 	{
-		GLfloat diff[4] = { 0.02f, 0.02f, 0.02f, 1.f };
-		GLfloat spec[4] = { 0.25f, 0.25f, 0.25f, 1.f };
+		GLfloat diff[4] = { 0.98f, 0.98f, 0.98f, 1.f };
+		GLfloat spec[4] = { 0.15f, 0.15f, 0.15f, 1.f };
 		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diff);
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
 		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 24.f);
 	}
 
-	// left eye white
+	// left sclera
 	glPushMatrix();
-	glTranslatef(-eyeOffsetX, eyeOffsetY, eyeOffsetZ + Z_EPS);
+	glTranslatef(-eyeOffX, eyeOffY, eyeOffZ);
 	drawSphere(eyeR);
 	glPopMatrix();
 
-	// right eye white
+	// right sclera
 	glPushMatrix();
-	glTranslatef(+eyeOffsetX, eyeOffsetY, eyeOffsetZ + Z_EPS);
+	glTranslatef(+eyeOffX, eyeOffY, eyeOffZ);
 	drawSphere(eyeR);
 	glPopMatrix();
 
 	// --- pupil material ---
 	{
-		GLfloat diff[4] = { 0.05f, 0.05f, 0.05f, 1.f };
-		GLfloat spec[4] = { 0.08f, 0.08f, 0.08f, 1.f };
+		GLfloat diff[4] = { 0.04f, 0.04f, 0.04f, 1.f };
+		GLfloat spec[4] = { 0.07f, 0.07f, 0.07f, 1.f };
 		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, diff);
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
 		glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.f);
 	}
 
+	// Pupils: place ON the eye surface (eyeR forward) and flatten along Z
+	const float pupilLift = Z_EPS;  // avoid z-fight with sclera
+	const float pupilFlattenZ = 0.2f;     // 0.2 = “disc-like”
+
 	// left pupil
 	glPushMatrix();
-	glTranslatef(-eyeOffsetX, eyeOffsetY, eyeOffsetZ + Z_EPS * 2.f);
+	glTranslatef(-eyeOffX, eyeOffY, surfaceZ + pupilLift);
+	glScalef(1.f, 1.f, pupilFlattenZ);
 	drawSphere(pupilR);
 	glPopMatrix();
 
 	// right pupil
 	glPushMatrix();
-	glTranslatef(+eyeOffsetX, eyeOffsetY, eyeOffsetZ + Z_EPS * 2.f);
+	glTranslatef(+eyeOffX, eyeOffY, surfaceZ + pupilLift);
+	glScalef(1.f, 1.f, pupilFlattenZ);
 	drawSphere(pupilR);
 	glPopMatrix();
 }
+
 
 void drawHead(const HumanDims& d) {
 	// pivot at the neck top (base of the head)
@@ -1111,6 +1156,7 @@ void drawHead(const HumanDims& d) {
 
 	useSkin();
 	drawSphere(d.headR);                       // draw head centered at origin
+	drawEyebrows(d);
 	drawEyes(d);
 	glPopMatrix();
 }
@@ -1411,8 +1457,6 @@ void drawHuman(const HumanDims& d, float walkPhaseDeg = 0.f, bool walking = fals
 	glTranslatef(0.f, bodyLift + bob, 0.f);
 	if (g_mode == MODE_RIG) applyJointRot(J_SPINE);
 
-	// swing angles
-	// swing angles (for walk)
 	// swing angles (for walk)
 	float swing = walking ? sin(walkPhaseDeg * (float)M_PI / 180.0f) * 30.f : 0.f;
 
