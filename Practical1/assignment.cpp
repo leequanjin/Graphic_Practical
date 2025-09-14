@@ -4,6 +4,7 @@
 #include <gl/GL.h>
 #include <gl/GLU.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #pragma comment (lib, "OpenGL32.lib")
 
@@ -65,13 +66,25 @@ HWND g_hWnd = nullptr;
 // --- Bitmap font (wglUseFontBitmaps) ---
 GLuint g_fontBase = 0;
 HFONT  g_font = nullptr;
-
-// Arrow key states (for smooth, held-down movement)
-bool g_keyUp = false, g_keyDown = false, g_keyLeft = false, g_keyRight = false;
+GLuint gTexBrownFabric = 0, gTexClothFabric = 0, gTexMetalLayered = 0, gTexRoofTile = 0, gTexShinyBlack = 0, gTexShinyMetal = 0, gTexWood = 0, gTexGold = 0;
 
 int qNo = 1;
 
+static const float GRID_HALF = 20.0f;
+
 int noOfSides = 30; // for circle and cylinder
+
+// --- Texture toggles/presets ---
+bool g_texturesEnabled = true;   // V to toggle on/off
+int  g_texPreset = 0;            // I to cycle
+const int TEX_PRESETS = 4;
+
+// What kind of texture are we asking for at each draw call?
+enum TexSlot { TEX_WOOD = 0, TEX_METAL, TEX_SHINY, TEX_CLOTH, TEX_LEATHER, TEX_GOLD, TEX_SILVER, TEX_MAX
+};
+
+// Mapping: preset -> slot -> GL texture id
+GLuint gTexPreset[TEX_PRESETS][TEX_MAX] = {};
 
 // light parameters
 float lightX = 8.0f, lightY = 10.0f, lightZ = 8.0f; // default: top-right-front
@@ -92,23 +105,31 @@ float sunSizeKey = 0.8f;
 
 // projection parameters
 float PNear = 1.0, PFar = 100.0;
+const float CAM_Z_MIN = 5.0f;
+const float CAM_Z_MAX = 50.0f;
 bool isOrtho = false, isPerspective = true;
 
-float camX = 0.f, camY = 0.f, camZ = 50.f; // camera position
+float camX = 0.f, camY = 3.f, camZ = 20.f; // camera position
 float camRotX = 10.f, camRotY = -20.f, camRotZ = 0.f; // camera rotation
 float camMoveSpeed = 0.2f;
 float camRotSpeed = 2.0f;
 
 // human position
 float hx = 0.f, hy = 0.f, hz = 0.f;
-float walkAnimSpeed = 0.2f; // speed of swing
-float humanSpeed = 0.02f; // speed of movement
+float walkAnimSpeed = 3.f; // speed of swing
+float humanSpeed = 0.04f; // speed of movement
 
 // walk cycle
 float walkPhase = 0.f;       // angle in degrees
 bool isWalking = false;      // walking state
 float walkDirX = 0.f, walkDirZ = 0.f; // direction
 float humanAngle = 0.f; // facing direction in degrees
+
+// Attack animation
+bool  g_attackActive = false;
+float g_attackT = 0.0f;   // 0..1 normalized time
+float g_attackSpeed = 0.01f;  // advance per frame (tweak speed)
+
 
 // ----- armor toggle (press U to show/hide) -----
 bool g_armorOn = true;
@@ -117,6 +138,9 @@ int weaponType = 1;
 
 // small offset so plates don't z-fight with the body
 const float Z_EPS = 0.01f;
+
+BITMAP BMP;				//bitmap structure
+HBITMAP hBMP = NULL;	//bitmap handle
 
 // simple materials
 inline void useMetal(float r = 0.75f, float g = 0.75f, float b = 0.80f) {
@@ -159,6 +183,14 @@ inline void useSkin(float r = 0.90f, float g = 0.76f, float b = 0.66f) {
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 16.f);
 }
 
+// --- Primitive tally (per frame) ---
+struct PrimTally {
+	long long points = 0, triangles = 0, tristrip = 0, trifan = 0,
+		quads = 0, quadstrip = 0, polygon = 0, lines = 0, linestrip = 0, lineloop = 0;
+} gPrim;
+
+static inline void ResetPrimTally() { gPrim = PrimTally(); }
+
 
 struct HumanDims {
 	float unit = 1.f; // base unit
@@ -187,9 +219,9 @@ struct HumanDims {
 	float upperArmL = unit * 1.5f;
 	float forearmL = unit * 1.5f;
 
-	float handH = unit * 1.f;
+	float handH = unit * 0.5f;
 	float handD = handH * 0.8;
-	float handW = handH * 0.2f;
+	float handW = handH * 0.8f;
 
 	// legs + feet = 4 (4/8 of total)
 	float upperLegL = unit * 2.0f;
@@ -199,6 +231,39 @@ struct HumanDims {
 	float footD = footH * 6.f;
 	float footW = footH * 2.f;
 };
+
+// Arrow-key state (used for camera/character movement per README)
+bool g_keyUp = false;
+bool g_keyDown = false;
+bool g_keyLeft = false;
+bool g_keyRight = false;
+
+// Hold-to-run (character); also slightly speeds attack timebase
+bool g_kShift = false;
+
+static inline void ResetCameraDefaults() {
+	// Camera position/rotation defaults
+	camX = 0.f; camY = 3.f; camZ = 20.f;
+	camRotX = 10.f; camRotY = -20.f; camRotZ = 0.f;
+
+	// (Optional) snap projection back to perspective if you want:
+	// isOrtho = false; isPerspective = true;
+}
+
+static inline void ResetCharacterDefaults() {
+	// Character transform
+	hx = 0.f; hy = 0.f; hz = 0.f;
+	humanAngle = 0.f;
+
+	// Locomotion & animation
+	walkPhase = 0.f;
+	isWalking = false;
+	walkDirX = 0.f; walkDirZ = 0.f;
+
+	// Cancel any attack in progress
+	g_attackActive = false;
+	g_attackT = 0.f;
+}
 
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -212,22 +277,11 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		if (wParam == VK_ESCAPE) { PostQuitMessage(0); break; }
 
 		// ---- Mode switching ----
-		else if (wParam == '1') {
-			g_mode = MODE_CAM;
-			if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: CAMERA]");
-		}
-		else if (wParam == '2') {
-			g_mode = MODE_CHAR;
-			if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: CHARACTER]");
-		}
-		else if (wParam == '3') {
-			g_mode = MODE_RIG;
-			if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: RIG]");
-			break;
-		}
+		if (wParam == '1') { g_mode = MODE_CAM;  if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: CAMERA]"); break; }
+		if (wParam == '2') { g_mode = MODE_CHAR; if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: CHARACTER]"); break; }
+		if (wParam == '3') { g_mode = MODE_RIG;  if (g_hWnd) SetWindowTextA(g_hWnd, "OpenGL Window  [Mode: RIG]"); break; }
 
-
-		// ---- Projection toggles (unchanged) ----
+		// ---- Projection ----
 		if (wParam == 'O') { isOrtho = true;  isPerspective = false; break; }
 		if (wParam == 'P') { isOrtho = false; isPerspective = true;  break; }
 
@@ -238,59 +292,48 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		if (wParam == 'D') { camRotY -= camRotSpeed; break; }
 		if (wParam == 'Q') { camRotZ += camRotSpeed; break; }
 		if (wParam == 'E') { camRotZ -= camRotSpeed; break; }
+		if (wParam == VK_HOME) { ResetCameraDefaults(); break; }
 
-		// ---- Armor / weapon (unchanged) ----
+		// ---- Global toggles ----
 		if (wParam == 'U') { g_armorOn = !g_armorOn; break; }
 		if (wParam == VK_TAB) { weaponType = 1 - weaponType; break; }
+		if (wParam == 'V') { g_texturesEnabled = !g_texturesEnabled; break; }
+		if (wParam == 'I') { g_texPreset = (g_texPreset + 1) % TEX_PRESETS; break; }
 
-		// ---- Character quick stop ----
-		if (wParam == VK_SPACE) { isWalking = false; break; }
-
-		// ---- PageUp/PageDown for camera Z (works in any mode) ----
-		if (wParam == VK_PRIOR) { camZ -= camMoveSpeed * 5; break; } // PageUp
-		if (wParam == VK_NEXT) { camZ += camMoveSpeed * 5; break; } // PageDown
-
-		// --- RIG MODE: per-joint controls ---
-		if (g_mode == MODE_RIG) {
-			// Joint selection
-			if (wParam == VK_OEM_4) { // '[' prev joint
-				g_selJoint = (g_selJoint - 1 + J_MAX) % J_MAX; break;
-			}
-			if (wParam == VK_OEM_6) { // ']' next joint
-				g_selJoint = (g_selJoint + 1) % J_MAX; break;
-			}
-
-			// Axis selection
-			if (wParam == 'X') { g_selAxis = 0; break; }
-			if (wParam == 'Y') { g_selAxis = 1; break; }
-			if (wParam == 'Z') { g_selAxis = 2; break; }
-			if (wParam == VK_OEM_COMMA) { // ',' prev axis
-				g_selAxis = (g_selAxis + 2) % 3; break;
-			}
-			if (wParam == VK_OEM_PERIOD) { // '.' next axis
-				g_selAxis = (g_selAxis + 1) % 3; break;
-			}
-
-			// Bend on the selected axis — all 4 arrow directions
-			if (wParam == VK_LEFT) { gJ[g_selJoint][g_selAxis] -= g_rigStep; break; }
-			if (wParam == VK_RIGHT) { gJ[g_selJoint][g_selAxis] += g_rigStep; break; }
-			if (wParam == VK_UP) { gJ[g_selJoint][g_selAxis] += g_rigStep; break; }
-			if (wParam == VK_DOWN) { gJ[g_selJoint][g_selAxis] -= g_rigStep; break; }
-
-			// Step size
-			if (wParam == VK_OEM_MINUS) { g_rigStep = max(0.1f, g_rigStep - 0.5f); break; }
-			if (wParam == VK_OEM_PLUS) { g_rigStep += 0.5f; break; }
-
-			// Reset: current axis, current joint, or all
-			if (wParam == '8') { gJ[g_selJoint][g_selAxis] = 0.f; break; }      // reset axis
-			if (wParam == '9') { gJ[g_selJoint][0] = gJ[g_selJoint][1] = gJ[g_selJoint][2] = 0.f; break; }
-			if (wParam == '0') {
-				for (int j = 0; j < J_MAX; ++j) gJ[j][0] = gJ[j][1] = gJ[j][2] = 0.f;
-				break;
-			}
+		// ---- PageUp/PageDown -> camera dolly Z ----
+		if (wParam == VK_PRIOR) {        // PageUp
+			camZ -= camMoveSpeed * 5;
+			if (camZ < CAM_Z_MIN) camZ = CAM_Z_MIN;
+			break;
+		}
+		if (wParam == VK_NEXT) {         // PageDown
+			camZ += camMoveSpeed * 5;
+			if (camZ > CAM_Z_MAX) camZ = CAM_Z_MAX;
+			break;
 		}
 
-		// ---- Light position (CAMERA mode only) ----
+		// ---- Character actions ----
+		if (g_mode == MODE_CHAR) {
+			if (wParam == VK_SPACE) { ResetCharacterDefaults(); break; }
+			if (wParam == 'F') { if (!g_attackActive) { g_attackActive = true; g_attackT = 0.0f; } break; }
+		}
+
+		// ---- Lighting (global toggles) ----
+		if (wParam == 'L') { fillOn = !fillOn; break; }
+		if (wParam == 'J') { ambientLevel = max(0.0f, ambientLevel - 0.05f); break; }
+		if (wParam == 'K') { ambientLevel = min(1.0f, ambientLevel + 0.05f); break; }
+		if (wParam == 'C') {
+			static int idx = 0;
+			const float presets[][3] = { {1,1,1}, {1.0f,0.85f,0.65f}, {0.75f,0.85f,1.0f} };
+			idx = (idx + 1) % 3;
+			fillColor[0] = presets[idx][0]; fillColor[1] = presets[idx][1]; fillColor[2] = presets[idx][2];
+			break;
+		}
+		if (wParam == 'B') { showSuns = !showSuns; break; }
+		if (wParam == 'N') { sunSizeFill = max(0.1f, sunSizeFill - 0.1f); break; }
+		if (wParam == 'M') { sunSizeFill += 0.1f; break; }
+
+		// ---- Camera-only light positioning & intensity ----
 		if (g_mode == MODE_CAM) {
 			if (wParam == 'T') { lightY += lightMoveSpeed; break; }
 			if (wParam == 'G') { lightY -= lightMoveSpeed; break; }
@@ -298,50 +341,56 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 			if (wParam == 'H') { lightX += lightMoveSpeed; break; }
 			if (wParam == 'R') { lightZ -= lightMoveSpeed; break; }
 			if (wParam == 'Y') { lightZ += lightMoveSpeed; break; }
+
+			// scope +/- to camera mode to avoid conflict with rig step
+			if (wParam == VK_OEM_PLUS) { fillIntensity = min(2.0f, fillIntensity + 0.05f); break; }
+			if (wParam == VK_OEM_MINUS) { fillIntensity = max(0.0f, fillIntensity - 0.05f); break; }
 		}
 
-		// Toggle fill light (GL_LIGHT1)
-		if (wParam == 'L') { fillOn = !fillOn; break; }
+		// ---- RIG: selection, rotation, and step size ----
+		if (g_mode == MODE_RIG) {
+			// selection
+			if (wParam == VK_OEM_4) { g_selJoint = (g_selJoint - 1 + J_MAX) % J_MAX; break; } // [
+			if (wParam == VK_OEM_6) { g_selJoint = (g_selJoint + 1) % J_MAX; break; }        // ]
+			if (wParam == 'X') { g_selAxis = 0; break; }
+			if (wParam == 'Y') { g_selAxis = 1; break; }
+			if (wParam == 'Z') { g_selAxis = 2; break; }
+			if (wParam == VK_OEM_COMMA) { g_selAxis = (g_selAxis + 2) % 3; break; }  // ,
+			if (wParam == VK_OEM_PERIOD) { g_selAxis = (g_selAxis + 1) % 3; break; }  // .
 
-		// Ambient down/up
-		if (wParam == 'J') { ambientLevel = max(0.0f, ambientLevel - 0.05f); break; }
-		if (wParam == 'K') { ambientLevel = min(1.0f, ambientLevel + 0.05f); break; }
+			// rotate selected axis
+			if (wParam == VK_LEFT || wParam == VK_DOWN) { gJ[g_selJoint][g_selAxis] -= g_rigStep; break; }
+			if (wParam == VK_RIGHT || wParam == VK_UP) { gJ[g_selJoint][g_selAxis] += g_rigStep; break; }
 
+			// step size (scoped to rig)
+			if (wParam == VK_OEM_MINUS) { g_rigStep = max(0.1f, g_rigStep - 0.5f); break; }
+			if (wParam == VK_OEM_PLUS) { g_rigStep += 0.5f; break; }
 
-		if (wParam == VK_OEM_PLUS) { fillIntensity = min(2.0f, fillIntensity + 0.05f); break; }
-		if (wParam == VK_OEM_MINUS) { fillIntensity = max(0.0f, fillIntensity - 0.05f); break; }
-		if (wParam == 'C') { // cycle fill color: white -> warm -> cool
-			static int idx = 0;
-			const float presets[][3] = { {1,1,1}, {1.0f,0.85f,0.65f}, {0.75f,0.85f,1.0f} };
-			idx = (idx + 1) % 3;
-			fillColor[0] = presets[idx][0]; fillColor[1] = presets[idx][1]; fillColor[2] = presets[idx][2];
-			break;
+			// reset
+			if (wParam == '8') { gJ[g_selJoint][g_selAxis] = 0.f; break; }
+			if (wParam == '9') { gJ[g_selJoint][0] = gJ[g_selJoint][1] = gJ[g_selJoint][2] = 0.f; break; }
+			if (wParam == '0') { for (int j = 0; j < J_MAX; ++j) gJ[j][0] = gJ[j][1] = gJ[j][2] = 0.f; break; }
 		}
 
-		// Toggle and tweak the visible suns
-		if (wParam == 'B') { showSuns = !showSuns; break; }          // show/hide
-		if (wParam == 'N') { sunSizeFill = max(0.1f, sunSizeFill - 0.1f); break; } // smaller fill sun
-		if (wParam == 'M') { sunSizeFill += 0.1f; break; }                          // bigger  fill sun
-
-
-		// ---- Arrow keys: set key state true (both modes use them) ----
-		// ---- Arrow keys for CAMERA/CHAR only (rig mode consumes them above) ----
+		// ---- Arrow keys as stateful movement in CAM/CHAR ----
 		if (g_mode != MODE_RIG) {
 			if (wParam == VK_UP) { g_keyUp = true;    break; }
 			if (wParam == VK_DOWN) { g_keyDown = true;  break; }
 			if (wParam == VK_LEFT) { g_keyLeft = true;  break; }
 			if (wParam == VK_RIGHT) { g_keyRight = true; break; }
+			if (wParam == VK_SHIFT) { g_kShift = true; break; }
 		}
-
 
 		break;
 	}
 	case WM_KEYUP: {
+		// release stateful arrows in CAM/CHAR
 		if (g_mode != MODE_RIG) {
 			if (wParam == VK_UP)    g_keyUp = false;
 			if (wParam == VK_DOWN)  g_keyDown = false;
 			if (wParam == VK_LEFT)  g_keyLeft = false;
 			if (wParam == VK_RIGHT) g_keyRight = false;
+			if (wParam == VK_SHIFT) g_kShift = false;
 		}
 		break;
 	}
@@ -352,6 +401,7 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 
 	return DefWindowProc(hWnd, msg, wParam, lParam);
 }
+
 //--------------------------------------------------------------------
 
 bool initPixelFormat(HDC hdc)
@@ -385,6 +435,107 @@ bool initPixelFormat(HDC hdc)
 	}
 }
 //--------------------------------------------------------------------
+
+// Tiny BMP loader using WinAPI + GLU (expects 24-bit or 32-bit DIBs)
+static GLuint LoadTextureBMP(LPCSTR filename) {
+	BITMAP bmp = {};
+	HBITMAP hBMP = (HBITMAP)LoadImageA(GetModuleHandle(NULL),
+		filename, IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION | LR_LOADFROMFILE);
+
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+
+	// sane defaults
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+	if (!hBMP) {
+		// pink checker fallback (so missing files are obvious)
+		const GLubyte fallback[4 * 3] = {
+			255,105,180,  0,0,0,
+			0,0,0,        255,105,180
+		};
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2, 2, 0,
+			GL_RGB, GL_UNSIGNED_BYTE, fallback);
+		return tex;
+	}
+
+	GetObject(hBMP, sizeof(bmp), &bmp);
+	// BMP pixels come as BGR in DIB sections
+	gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB,
+		bmp.bmWidth, bmp.bmHeight,
+		GL_BGR_EXT, GL_UNSIGNED_BYTE, bmp.bmBits);
+
+	DeleteObject(hBMP);
+	return tex;
+}
+
+inline void UseSlot(TexSlot s) {
+	if (!g_texturesEnabled) { glBindTexture(GL_TEXTURE_2D, 0); return; }
+	glBindTexture(GL_TEXTURE_2D, gTexPreset[g_texPreset][s]);
+}
+
+
+static void LoadAllTextures() {
+	glEnable(GL_TEXTURE_2D);
+
+	gTexBrownFabric = LoadTextureBMP("brown_fabric.bmp");
+	gTexClothFabric = LoadTextureBMP("cloth_fabric.bmp");
+	gTexMetalLayered = LoadTextureBMP("metal_layered.bmp");
+	gTexRoofTile = LoadTextureBMP("roof_tile.bmp");
+	gTexShinyBlack = LoadTextureBMP("shiny_black.bmp");
+	gTexShinyMetal = LoadTextureBMP("shiny_metal.bmp");
+	gTexWood = LoadTextureBMP("wood.bmp");
+	gTexGold = LoadTextureBMP("gold.bmp");
+
+	// --- Preset 0: default ---
+	gTexPreset[0][TEX_WOOD] = gTexWood;
+	gTexPreset[0][TEX_METAL] = gTexMetalLayered;
+	gTexPreset[0][TEX_SHINY] = gTexShinyMetal;
+	gTexPreset[0][TEX_CLOTH] = gTexClothFabric;
+	gTexPreset[0][TEX_LEATHER] = gTexBrownFabric;
+	gTexPreset[0][TEX_GOLD] = gTexGold;
+	gTexPreset[0][TEX_SILVER] = gTexShinyMetal;
+
+	// --- Preset 1: alt look (darker metal & leather/cloth swapped) ---
+	gTexPreset[1][TEX_WOOD] = gTexWood;
+	gTexPreset[1][TEX_METAL] = gTexRoofTile;   // dark armor
+	gTexPreset[1][TEX_SHINY] = gTexShinyBlack;   // keep shiny for accents
+	gTexPreset[1][TEX_CLOTH] = gTexBrownFabric;  // cloth uses brown
+	gTexPreset[1][TEX_LEATHER] = gTexClothFabric;  // leather uses cloth pattern
+	gTexPreset[1][TEX_GOLD] = gTexGold;
+	gTexPreset[1][TEX_SILVER] = gTexShinyMetal;
+
+	// --- Preset 2: alt look (gold metal) ---
+	gTexPreset[2][TEX_WOOD] = gTexWood;
+	gTexPreset[2][TEX_METAL] = gTexMetalLayered;
+	gTexPreset[2][TEX_SHINY] = gTexGold;
+	gTexPreset[2][TEX_CLOTH] = gTexClothFabric;
+	gTexPreset[2][TEX_LEATHER] = gTexBrownFabric;
+	gTexPreset[2][TEX_GOLD] = gTexShinyMetal;
+	gTexPreset[2][TEX_SILVER] = gTexShinyMetal;
+
+	// --- Preset 3: alt look (gold metal) ---
+	gTexPreset[3][TEX_WOOD] = gTexWood;
+	gTexPreset[3][TEX_METAL] = gTexRoofTile;
+	gTexPreset[3][TEX_SHINY] = gTexGold;
+	gTexPreset[3][TEX_CLOTH] = gTexBrownFabric;
+	gTexPreset[3][TEX_LEATHER] = gTexClothFabric;
+	gTexPreset[3][TEX_GOLD] = gTexShinyBlack;
+	gTexPreset[3][TEX_SILVER] = gTexShinyMetal;
+}
+
+static inline void BindTex(GLuint tex) {
+	glBindTexture(GL_TEXTURE_2D, tex);
+}
+
+static inline void UnbindTex() {
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
 
 // Build an OpenGL bitmap font from the current HDC
 void BuildFont(HDC hdc, int height = 16, const char* face = "Consolas") {
@@ -435,15 +586,13 @@ void drawHUD() {
 	if (!g_hWnd) return;
 
 	RECT rc; GetClientRect(g_hWnd, &rc);
-	int w = rc.right - rc.left;
-	int h = rc.bottom - rc.top;
+	const int w = rc.right - rc.left;
+	const int h = rc.bottom - rc.top;
 
-	// Save states
 	glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_COLOR_BUFFER_BIT);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_DEPTH_TEST);
 
-	// Setup orthographic 2D
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
@@ -453,289 +602,441 @@ void drawHUD() {
 	glPushMatrix();
 	glLoadIdentity();
 
-	// Text color
 	glColor3f(1.f, 1.f, 1.f);
 
-	// Top-left block
-	glRasterPos2i(10, h - 20);
-	const char* modeName =
-		(g_mode == MODE_CAM) ? "CAMERA" :
-		(g_mode == MODE_CHAR) ? "CHARACTER" : "RIG";
-	glPrint("Mode: %s", modeName);
+	int y = h - 20;
+	auto row = [&](const char* s) {
+		glRasterPos2i(10, y);
+		glPrint("%s", s);
+		y -= 18;
+		};
+	auto gap = [&]() { y -= 8; };
 
-	glRasterPos2i(10, h - 40);
-	glPrint("Cam Pos: (%.2f, %.2f, %.2f)  Rot: (%.1f, %.1f, %.1f)",
-		camX, camY, camZ, camRotX, camRotY, camRotZ);
+	// ===== Header =====
+	{
+		const char* modeName =
+			(g_mode == MODE_CAM) ? "CAMERA" :
+			(g_mode == MODE_CHAR) ? "CHARACTER" : "RIG";
+		glRasterPos2i(10, y);
+		glPrint("Mode: %s", modeName);
+		y -= 18;
 
-	glRasterPos2i(10, h - 60);
-	glPrint("Char Pos: (%.2f, %.2f, %.2f)  Angle: %.1f  Walking: %s",
-		hx, hy, hz, humanAngle, isWalking ? "YES" : "NO");
+		glRasterPos2i(10, y);
+		glPrint("Cam Pos: (%.2f, %.2f, %.2f)  Rot: (%.1f, %.1f, %.1f)",
+			camX, camY, camZ, camRotX, camRotY, camRotZ);
+		y -= 18;
 
-	if (g_mode == MODE_CAM) {
-		glRasterPos2i(10, h - 80);
-		glPrint("Fill light pos: (%.2f, %.2f, %.2f)  Move: F/H=X  T/G=Y  R/Y=Z",
-			lightX, lightY, lightZ);
+		glRasterPos2i(10, y);
+		glPrint("Char Pos: (%.2f, %.2f, %.2f)  Angle: %.1f  Walking: %s",
+			hx, hy, hz, humanAngle, isWalking ? "YES" : "NO");
+		y -= 18;
+		gap();
 
-		glRasterPos2i(10, h - 100);
-		glPrint("Fill: %s  Intensity: +/- -> %.2f  Tone: C to cycle  Color=(%.2f,%.2f,%.2f)",
-			fillOn ? "ON (L toggles)" : "OFF (L toggles)",
-			fillIntensity, fillColor[0], fillColor[1], fillColor[2]);
+		// --- RIG mode readout (selected joint/axis/step + angles) ---
+		if (g_mode == MODE_RIG) {
+			const int j = g_selJoint;
+			const int a = g_selAxis;
+			row("RIG:");
+			glRasterPos2i(20, y);
+			glPrint("Selected  Joint: %s   Axis: %c   Step: %.1f deg",
+				jointName(j), axisName(a), g_rigStep);
+			y -= 18;
 
-		glRasterPos2i(10, h - 120);
-		glPrint("Ambient: %.2f  Adjust: J-/K+", ambientLevel);
+			glRasterPos2i(20, y);
+			glPrint("Angles   X: %.1f   Y: %.1f   Z: %.1f",
+				gJ[j][0], gJ[j][1], gJ[j][2]);
+			y -= 18;
+			gap();
+		}
 	}
 
-	if (g_mode == MODE_RIG) {
-		glRasterPos2i(10, h - 80);
-		glPrint("RIG: Joint=[%s]  Axis=%c  Angle=%.1f deg  Step=%.1f",
-			jointName(g_selJoint), axisName(g_selAxis), gJ[g_selJoint][g_selAxis], g_rigStep);
-		glRasterPos2i(10, h - 100);
-		glPrint("[/]=joint  ,/.=axis  X/Y/Z=pick axis  Arrows=rotate  -=/+=step  8=reset axis  9=reset joint  0=reset all");
-	}
+	// ===== Textures =====
+	glRasterPos2i(10, y);
+	glPrint("Textures: %s   Preset: %d",
+		g_texturesEnabled ? "ON" : "OFF", g_texPreset);
+	y -= 18;
+	gap();
 
-	
+	// ===== Primitive Tally =====
+	row("Primitives (this frame):");
+	glRasterPos2i(10, y);
+	glPrint("  Points:%lld  Tris:%lld  TriStrip:%lld  TriFan:%lld",
+		gPrim.points, gPrim.triangles, gPrim.tristrip, gPrim.trifan);
+	y -= 18;
 
+	glRasterPos2i(10, y);
+	glPrint("  Quads:%lld  QuadStrip:%lld  Polygon:%lld",
+		gPrim.quads, gPrim.quadstrip, gPrim.polygon);
+	y -= 18;
 
-	// Restore matrices
+	glRasterPos2i(10, y);
+	glPrint("  Lines:%lld  LineStrip:%lld  LineLoop:%lld",
+		gPrim.lines, gPrim.linestrip, gPrim.lineloop);
+	y -= 18;
+
+	// Restore matrices/state
 	glPopMatrix(); // model
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
-
 	glPopAttrib();
 }
 
+static inline float smooth01(float t) { t = max(0.f, min(1.f, t)); return t * t * (3.f - 2.f * t); }
 
 void setWire(bool on) {
 	glPolygonMode(GL_FRONT_AND_BACK, on ? GL_LINE : GL_FILL);
 }
 
 void handleInputPerFrame() {
-	// Mode-specific handling for arrow keys
+	// ---- CAMERA movement (Arrow keys move position; PageUp/Down handled on keydown) ----
 	if (g_mode == MODE_CAM) {
-		// Camera movement with arrows, Z with PageUp/PageDown (kept in WM_KEYDOWN too if you like)
+		// Arrow Up/Down => Y ± ; Arrow Left/Right => X ±
 		if (g_keyUp)    camY += camMoveSpeed;
 		if (g_keyDown)  camY -= camMoveSpeed;
 		if (g_keyLeft)  camX -= camMoveSpeed;
 		if (g_keyRight) camX += camMoveSpeed;
-		// Z moves are still available via PageUp/PageDown in WM_KEYDOWN
+		// NOTE: PageUp/PageDown (VK_PRIOR/VK_NEXT) already adjust camZ in WM_KEYDOWN.
 	}
-	else if (g_mode == MODE_CHAR) {
+
+	// ---- CHARACTER movement (Arrow keys = 8-way walking; SHIFT to run) ----
+	if (g_mode == MODE_CHAR) {
 		float dx = 0.f, dz = 0.f;
-		if (g_keyUp)    dz -= 1.f;   // forward (negative Z in your world)
-		if (g_keyDown)  dz += 1.f;   // backward
-		if (g_keyLeft)  dx -= 1.f;   // left
-		if (g_keyRight) dx += 1.f;   // right
+		if (g_keyUp)    dz -= 1.f;
+		if (g_keyDown)  dz += 1.f;
+		if (g_keyLeft)  dx -= 1.f;
+		if (g_keyRight) dx += 1.f;
 
 		if (dx != 0.f || dz != 0.f) {
-			// normalise diagonal movement
 			float len = sqrtf(dx * dx + dz * dz);
 			dx /= len; dz /= len;
-
-			walkDirX = dx;
-			walkDirZ = dz;
-			isWalking = true;  // walk while any arrow key is held
+			walkDirX = dx; walkDirZ = dz;
+			// update facing NOW, even if we later reject the move
+			humanAngle = atan2f(dx, dz) * 180.0f / (float)M_PI;
+			isWalking = true;
 		}
 		else {
-			// no arrows held
 			isWalking = false;
 		}
 	}
+
+	// ---- Attack animation timebase (unchanged; SHIFT gives tiny boost) ----
+	if (g_mode == MODE_CHAR && g_attackActive) {
+		g_attackT += g_attackSpeed * (g_kShift ? 3.0f : 1.0f);
+		if (g_attackT >= 1.0f) { g_attackT = 0.0f; g_attackActive = false; }
+	}
 }
 
+
 void drawSphere(double r) {
-	GLUquadricObj* sphere = NULL;
-	sphere = gluNewQuadric();
-	gluQuadricDrawStyle(sphere, GLU_FILL);
-	gluSphere(sphere, r, noOfSides, noOfSides);
-	gluDeleteQuadric(sphere);
+	const int slices = noOfSides;         // 30 by default
+	const int stacks = noOfSides;         // keep symmetric; tweak if you like
+
+	// equator at v=0.5, ranges [-pi/2, +pi/2]
+	for (int i = 0; i < stacks; ++i) {
+		double v0 = (double)i / stacks;
+		double v1 = (double)(i + 1) / stacks;
+		double phi0 = (M_PI * (v0 - 0.5));    // -pi/2 .. +pi/2
+		double phi1 = (M_PI * (v1 - 0.5));
+
+		glBegin(GL_TRIANGLE_STRIP);
+		for (int j = 0; j <= slices; ++j) {
+			double u = (double)j / slices;       // 0..1 around
+			double th = u * (2.0 * M_PI);
+
+			double c0 = cos(phi0), s0 = sin(phi0);
+			double c1 = cos(phi1), s1 = sin(phi1);
+			double ct = cos(th), st = sin(th);
+
+			// ring i
+			double nx0 = ct * c0, ny0 = s0, nz0 = st * c0;
+			glNormal3d(nx0, ny0, nz0);
+			glTexCoord2d(u, v0);
+			glVertex3d(r * nx0, r * ny0, r * nz0);
+
+			// ring i+1
+			double nx1 = ct * c1, ny1 = s1, nz1 = st * c1;
+			glNormal3d(nx1, ny1, nz1);
+			glTexCoord2d(u, v1);
+			glVertex3d(r * nx1, r * ny1, r * nz1);
+		}
+		glEnd();
+		gPrim.tristrip += 1;
+	}
 }
 
 void drawCylinder(double br, double tr, double h) {
-	GLUquadricObj* cylinder = NULL;
-	cylinder = gluNewQuadric();
-	gluQuadricDrawStyle(cylinder, GLU_FILL);
-	gluCylinder(cylinder, br, tr, h, noOfSides, noOfSides);
-	gluDeleteQuadric(cylinder);
+	const int slices = noOfSides;
+
+	// ---- side (QUAD STRIP) ----
+	glBegin(GL_QUAD_STRIP);
+	for (int j = 0; j <= slices; ++j) {          // repeat first ring to close seam
+		double u = (double)j / slices;          // 0..1 around
+		double th = u * (2.0 * M_PI);
+		double ct = cos(th), st = sin(th);
+
+		glNormal3d(ct, 0.0, st);
+		glTexCoord2d(u, 0.0);                    // bottom ring
+		glVertex3d(br * ct, 0.0, br * st);
+
+		glNormal3d(ct, 0.0, st);
+		glTexCoord2d(u, 1.0);                    // top ring
+		glVertex3d(tr * ct, h, tr * st);
+	}
+	glEnd();
+	gPrim.quadstrip += 1;
+
+	// ---- bottom cap (fan) ----
+	if (br > 0.0) {
+		glBegin(GL_TRIANGLE_FAN);
+		glNormal3d(0.0, -1.0, 0.0);
+		glTexCoord2d(0.5, 0.5);
+		glVertex3d(0.0, 0.0, 0.0);                // center
+		for (int j = 0; j <= slices; ++j) {
+			double u = (double)j / slices;
+			double th = (1.0 - u) * (2.0 * M_PI); // CCW when viewed from below
+			double ct = cos(th), st = sin(th);
+			glTexCoord2d(0.5 + 0.5 * ct, 0.5 + 0.5 * st);
+			glVertex3d(br * ct, 0.0, br * st);
+		}
+		glEnd();
+		gPrim.trifan += 1;
+	}
+
+	// ---- top cap (fan) ----
+	if (tr > 0.0) {
+		glBegin(GL_TRIANGLE_FAN);
+		glNormal3d(0.0, +1.0, 0.0);
+		glTexCoord2d(0.5, 0.5);
+		glVertex3d(0.0, h, 0.0);                  // center
+		for (int j = 0; j <= slices; ++j) {
+			double u = (double)j / slices;
+			double th = u * (2.0 * M_PI);         // CCW when viewed from above
+			double ct = cos(th), st = sin(th);
+			glTexCoord2d(0.5 + 0.5 * ct, 0.5 + 0.5 * st);
+			glVertex3d(tr * ct, h, tr * st);
+		}
+		glEnd();
+		gPrim.trifan += 1;
+	}
 }
 
 void drawYCylinder(double br, double tr, float h) {
 	glPushMatrix();
-	glRotatef(90.0f, 1.f, 0.f, 0.f);
+	glRotatef(180.0f, 1.f, 0.f, 0.f);
 	drawCylinder(br, tr, h);
 	glPopMatrix();
 }
 
-void drawDisk(double inr, double outr) {
-	GLUquadricObj* disk = NULL;	// Create a new quadric object pointer
-	disk = gluNewQuadric();		// Create a new quadric object in the memory
-	gluQuadricDrawStyle(disk, GLU_LINE); // Set the draw style to line
-	gluDisk(disk, inr, outr, 30, 30);	// Draw a disk with inner radius inr, outer radius outr, 30 slices and loops
-	gluDeleteQuadric(disk);	// Delete the quadric object from the memory	
-}
-
-void drawPartialDisk(double inr, double outr, double startAngle, double sweepAngle) {
-	GLUquadricObj* disk = NULL;	// Create a new quadric object pointer
-	disk = gluNewQuadric();		// Create a new quadric object in the memory
-	gluQuadricDrawStyle(disk, GLU_LINE); // Set the draw style to line
-	gluPartialDisk(disk, inr, outr, 30, 30, startAngle, sweepAngle); // Draw a partial disk with inner radius inr, outer radius outr, 30 slices and loops, starting angle startAngle and sweep angle sweepAngle
-	gluDeleteQuadric(disk);	// Delete the quadric object from the memory	
-}
-
 void drawBlock(double w, double h, double d) {
-	double x = w / 2.0;
-	double y = h / 2.0;
-	double z = d / 2.0;
+	const float TILE = 1.0f;        // increase to repeat more
+	double x = w * 0.5, y = h * 0.5, z = d * 0.5;
 
 	glBegin(GL_QUADS);
+	// Front (+Z): use X (u), Y (v)
+	glNormal3f(0, 0, 1);
+	glTexCoord2f(0, 0);         glVertex3f(-x, -y, z);
+	glTexCoord2f(TILE, 0);      glVertex3f(x, -y, z);
+	glTexCoord2f(TILE, TILE);   glVertex3f(x, y, z);
+	glTexCoord2f(0, TILE);      glVertex3f(-x, y, z);
 
-	// Front face
-	glNormal3f(0.0, 0.0, 1.0);
-	glVertex3f(-x, -y, z);
-	glVertex3f(x, -y, z);
-	glVertex3f(x, y, z);
-	glVertex3f(-x, y, z);
+	// Back (-Z): X, Y (flip U to keep same orientation visually)
+	glNormal3f(0, 0, -1);
+	glTexCoord2f(TILE, 0);      glVertex3f(-x, -y, -z);
+	glTexCoord2f(0, 0);         glVertex3f(x, -y, -z);
+	glTexCoord2f(0, TILE);      glVertex3f(x, y, -z);
+	glTexCoord2f(TILE, TILE);   glVertex3f(-x, y, -z);
 
-	// Back face
-	glNormal3f(0.0, 0.0, -1.0);
-	glVertex3f(-x, -y, -z);
-	glVertex3f(x, -y, -z);
-	glVertex3f(x, y, -z);
-	glVertex3f(-x, y, -z);
+	// Left (-X): use Z (u), Y (v)
+	glNormal3f(-1, 0, 0);
+	glTexCoord2f(0, 0);         glVertex3f(-x, -y, -z);
+	glTexCoord2f(TILE, 0);      glVertex3f(-x, -y, z);
+	glTexCoord2f(TILE, TILE);   glVertex3f(-x, y, z);
+	glTexCoord2f(0, TILE);      glVertex3f(-x, y, -z);
 
-	// Left face
-	glNormal3f(-1.0, 0.0, 0.0);
-	glVertex3f(-x, -y, -z);
-	glVertex3f(-x, -y, z);
-	glVertex3f(-x, y, z);
-	glVertex3f(-x, y, -z);
+	// Right (+X): Z, Y
+	glNormal3f(1, 0, 0);
+	glTexCoord2f(0, 0);         glVertex3f(x, -y, z);
+	glTexCoord2f(TILE, 0);      glVertex3f(x, -y, -z);
+	glTexCoord2f(TILE, TILE);   glVertex3f(x, y, -z);
+	glTexCoord2f(0, TILE);      glVertex3f(x, y, z);
 
-	// Right face
-	glNormal3f(1.0, 0.0, 0.0);
-	glVertex3f(x, -y, -z);
-	glVertex3f(x, -y, z);
-	glVertex3f(x, y, z);
-	glVertex3f(x, y, -z);
+	// Top (+Y): X (u), Z (v)
+	glNormal3f(0, 1, 0);
+	glTexCoord2f(0, 0);         glVertex3f(-x, y, -z);
+	glTexCoord2f(TILE, 0);      glVertex3f(x, y, -z);
+	glTexCoord2f(TILE, TILE);   glVertex3f(x, y, z);
+	glTexCoord2f(0, TILE);      glVertex3f(-x, y, z);
 
-	// Top face
-	glNormal3f(0.0, 1.0, 0.0);
-	glVertex3f(-x, y, -z);
-	glVertex3f(x, y, -z);
-	glVertex3f(x, y, z);
-	glVertex3f(-x, y, z);
+	// Bottom (-Y): X, Z
+	glNormal3f(0, -1, 0);
+	glTexCoord2f(0, 0);         glVertex3f(-x, -y, -z);
+	glTexCoord2f(TILE, 0);      glVertex3f(x, -y, -z);
+	glTexCoord2f(TILE, TILE);   glVertex3f(x, -y, z);
+	glTexCoord2f(0, TILE);      glVertex3f(-x, -y, z);
+	glEnd();
 
-	// Bottom face
-	glNormal3f(0.0, -1.0, 0.0);
-	glVertex3f(-x, -y, -z);
-	glVertex3f(x, -y, -z);
-	glVertex3f(x, -y, z);
-	glVertex3f(-x, -y, z);
+	gPrim.quads += 6;
+}
+
+// simple helpers (local)
+static inline void nrmFromTri(double ax, double ay, double az,
+	double bx, double by, double bz,
+	double cx, double cy, double cz)
+{
+	// n = normalize( (b-a) x (c-a) )
+	double ux = bx - ax, uy = by - ay, uz = bz - az;
+	double vx = cx - ax, vy = cy - ay, vz = cz - az;
+	double nx = uy * vz - uz * vy;
+	double ny = uz * vx - ux * vz;
+	double nz = ux * vy - uy * vx;
+	double len = sqrt(nx * nx + ny * ny + nz * nz);
+	if (len > 1e-12) { nx /= len; ny /= len; nz /= len; }
+	glNormal3d(nx, ny, nz);
+}
+
+// Pyramid with rectangular base (baseW along X, baseD along Z), height h along +Y.
+// Centered at origin: base at y=-h/2, apex at y=+h/2.
+void drawPyramid(double baseW, double baseD, double h, bool capBase = true)
+{
+	const double bx = baseW * 0.5;
+	const double bz = baseD * 0.5;
+	const double y0 = -h * 0.5;  // base plane
+	const double y1 = +h * 0.5;  // apex
+
+	// base corners (CCW seen from +Y)
+	const double x0 = -bx, x1 = +bx;
+	const double z0 = -bz, z1 = +bz;
+
+	// apex
+	const double ax = 0.0, ay = y1, az = 0.0;
+
+	// ---- 4 side faces (triangles), CCW seen from outside ----
+	glBegin(GL_TRIANGLES);
+
+	// +Z face: (x0,y0,z1) -> (x1,y0,z1) -> apex
+	nrmFromTri(x0, y0, z1, x1, y0, z1, ax, ay, az);
+	glTexCoord2d(0.0, 0.0); glVertex3d(x0, y0, z1);
+	glTexCoord2d(1.0, 0.0); glVertex3d(x1, y0, z1);
+	glTexCoord2d(0.5, 1.0); glVertex3d(ax, ay, az);
+
+	// +X face: (x1,y0,z1) -> (x1,y0,z0) -> apex
+	nrmFromTri(x1, y0, z1, x1, y0, z0, ax, ay, az);
+	glTexCoord2d(0.0, 0.0); glVertex3d(x1, y0, z1);
+	glTexCoord2d(1.0, 0.0); glVertex3d(x1, y0, z0);
+	glTexCoord2d(0.5, 1.0); glVertex3d(ax, ay, az);
+
+	// -Z face: (x1,y0,z0) -> (x0,y0,z0) -> apex
+	nrmFromTri(x1, y0, z0, x0, y0, z0, ax, ay, az);
+	glTexCoord2d(0.0, 0.0); glVertex3d(x1, y0, z0);
+	glTexCoord2d(1.0, 0.0); glVertex3d(x0, y0, z0);
+	glTexCoord2d(0.5, 1.0); glVertex3d(ax, ay, az);
+
+	// -X face: (x0,y0,z0) -> (x0,y0,z1) -> apex
+	nrmFromTri(x0, y0, z0, x0, y0, z1, ax, ay, az);
+	glTexCoord2d(0.0, 0.0); glVertex3d(x0, y0, z0);
+	glTexCoord2d(1.0, 0.0); glVertex3d(x0, y0, z1);
+	glTexCoord2d(0.5, 1.0); glVertex3d(ax, ay, az);
 
 	glEnd();
+
+	gPrim.triangles += 4;
+
+	// ---- optional base cap (quad), CCW seen from above ----
+	if (capBase) {
+		glBegin(GL_QUADS);
+		glNormal3d(0.0, -1.0, 0.0);
+		glTexCoord2d(0.0, 0.0); glVertex3d(x0, y0, z0);
+		glTexCoord2d(1.0, 0.0); glVertex3d(x1, y0, z0);
+		glTexCoord2d(1.0, 1.0); glVertex3d(x1, y0, z1);
+		glTexCoord2d(0.0, 1.0); glVertex3d(x0, y0, z1);
+		glEnd();
+		gPrim.quads += 1;
+	}
+	
 }
+
 
 void drawTrapezoidBlock(double bottomW, double topW, double h, double bottomD, double topD)
 {
-	double halfBottomW = bottomW / 2.0;
-	double halfTopW = topW / 2.0;
-	double halfH = h / 2.0;
-	double halfBottomD = bottomD / 2.0;
-	double halfTopD = topD / 2.0;
+	double bw = bottomW * 0.5, tw = topW * 0.5;
+	double bh = h * 0.5, th = h * 0.5;
+	double bd = bottomD * 0.5, td = topD * 0.5;
 
 	glBegin(GL_QUADS);
+	// Front (+Z): U across width, V across height
+	glNormal3f(0, 0, 1);
+	glTexCoord2f(0, 0); glVertex3f(-bw, -bh, bd);
+	glTexCoord2f(1, 0); glVertex3f(bw, -bh, bd);
+	glTexCoord2f(1, 1); glVertex3f(tw, th, td);
+	glTexCoord2f(0, 1); glVertex3f(-tw, th, td);
 
-	// --- Front face (Z positive) ---
-	glNormal3f(0.0f, 0.0f, 1.0f);
-	glVertex3f(-halfBottomW, -halfH, halfBottomD);
-	glVertex3f(halfBottomW, -halfH, halfBottomD);
-	glVertex3f(halfTopW, halfH, halfTopD);
-	glVertex3f(-halfTopW, halfH, halfTopD);
+	// Back (-Z)
+	glNormal3f(0, 0, -1);
+	glTexCoord2f(0, 0); glVertex3f(-bw, -bh, -bd);
+	glTexCoord2f(1, 0); glVertex3f(bw, -bh, -bd);
+	glTexCoord2f(1, 1); glVertex3f(tw, th, -td);
+	glTexCoord2f(0, 1); glVertex3f(-tw, th, -td);
 
-	// --- Back face (Z negative) ---
-	glNormal3f(0.0f, 0.0f, -1.0f);
-	glVertex3f(-halfBottomW, -halfH, -halfBottomD);
-	glVertex3f(halfBottomW, -halfH, -halfBottomD);
-	glVertex3f(halfTopW, halfH, -halfTopD);
-	glVertex3f(-halfTopW, halfH, -halfTopD);
-
-	// --- Left face (slanted in X & Z) ---
+	// Left (-X): U depth, V height
 	{
-		// Two vectors defining the face
-		float v1[3] = { 0, h, halfTopD - halfBottomD };     // vertical slope (y,z)
-		float v2[3] = { halfBottomW - halfTopW, h, 0 };    // slope (x,y)
-		// Cross product for normal
-		float nx = v1[1] * v2[2] - v1[2] * v2[1];
-		float ny = v1[2] * v2[0] - v1[0] * v2[2];
-		float nz = v1[0] * v2[1] - v1[1] * v2[0];
-		float len = sqrt(nx * nx + ny * ny + nz * nz);
-		nx /= len; ny /= len; nz /= len;
-
-		glNormal3f(nx, ny, nz);
-		glVertex3f(-halfBottomW, -halfH, -halfBottomD);
-		glVertex3f(-halfBottomW, -halfH, halfBottomD);
-		glVertex3f(-halfTopW, halfH, halfTopD);
-		glVertex3f(-halfTopW, halfH, -halfTopD);
+		// approximate normal already computed earlier – keep simple:
+		glNormal3f(-1, 0, 0);
+		glTexCoord2f(0, 0); glVertex3f(-bw, -bh, -bd);
+		glTexCoord2f(1, 0); glVertex3f(-bw, -bh, bd);
+		glTexCoord2f(1, 1); glVertex3f(-tw, th, td);
+		glTexCoord2f(0, 1); glVertex3f(-tw, th, -td);
 	}
 
-	// --- Right face (slanted in X & Z) ---
-	{
-		float v1[3] = { 0, h, halfTopD - halfBottomD };
-		float v2[3] = { halfTopW - halfBottomW, h, 0 };
-		float nx = v1[1] * v2[2] - v1[2] * v2[1];
-		float ny = v1[2] * v2[0] - v1[0] * v2[2];
-		float nz = v1[0] * v2[1] - v1[1] * v2[0];
-		float len = sqrt(nx * nx + ny * ny + nz * nz);
-		nx /= len; ny /= len; nz /= len;
+	// Right (+X)
+	glNormal3f(1, 0, 0);
+	glTexCoord2f(0, 0); glVertex3f(bw, -bh, bd);
+	glTexCoord2f(1, 0); glVertex3f(bw, -bh, -bd);
+	glTexCoord2f(1, 1); glVertex3f(tw, th, -td);
+	glTexCoord2f(0, 1); glVertex3f(tw, th, td);
 
-		glNormal3f(nx, ny, nz);
-		glVertex3f(halfBottomW, -halfH, -halfBottomD);
-		glVertex3f(halfBottomW, -halfH, halfBottomD);
-		glVertex3f(halfTopW, halfH, halfTopD);
-		glVertex3f(halfTopW, halfH, -halfTopD);
-	}
+	// Top (+Y): U across width, V across depth
+	glNormal3f(0, 1, 0);
+	glTexCoord2f(0, 0); glVertex3f(-tw, th, -td);
+	glTexCoord2f(1, 0); glVertex3f(tw, th, -td);
+	glTexCoord2f(1, 1); glVertex3f(tw, th, td);
+	glTexCoord2f(0, 1); glVertex3f(-tw, th, td);
 
-	// --- Top face ---
-	glNormal3f(0.0f, 1.0f, 0.0f);
-	glVertex3f(-halfTopW, halfH, -halfTopD);
-	glVertex3f(halfTopW, halfH, -halfTopD);
-	glVertex3f(halfTopW, halfH, halfTopD);
-	glVertex3f(-halfTopW, halfH, halfTopD);
-
-	// --- Bottom face ---
-	glNormal3f(0.0f, -1.0f, 0.0f);
-	glVertex3f(-halfBottomW, -halfH, -halfBottomD);
-	glVertex3f(halfBottomW, -halfH, -halfBottomD);
-	glVertex3f(halfBottomW, -halfH, halfBottomD);
-	glVertex3f(-halfBottomW, -halfH, halfBottomD);
-
+	// Bottom (-Y): U across width, V across depth
+	glNormal3f(0, -1, 0);
+	glTexCoord2f(0, 0); glVertex3f(-bw, -bh, -bd);
+	glTexCoord2f(1, 0); glVertex3f(bw, -bh, -bd);
+	glTexCoord2f(1, 1); glVertex3f(bw, -bh, bd);
+	glTexCoord2f(0, 1); glVertex3f(-bw, -bh, bd);
 	glEnd();
+
+	gPrim.quads += 6;
 }
 
 // --- Helper: dome (hemisphere) ---
 void drawHemisphere(float r, int slices = 30, int stacks = 15) {
-	GLUquadric* quad = gluNewQuadric();
-	gluQuadricNormals(quad, GLU_SMOOTH);
 	for (int i = 0; i < stacks; i++) {
-		float phi1 = (M_PI / 2.0f) * i / stacks;
-		float phi2 = (M_PI / 2.0f) * (i + 1) / stacks;
+		float v1 = (float)i / stacks;         // 0..1 from equator to top
+		float v2 = (float)(i + 1) / stacks;
+		float phi1 = (M_PI / 2.f) * v1;
+		float phi2 = (M_PI / 2.f) * v2;
 		glBegin(GL_TRIANGLE_STRIP);
 		for (int j = 0; j <= slices; j++) {
-			float theta = 2.0f * M_PI * j / slices;
-			float x1 = cos(theta) * cos(phi1);
-			float y1 = sin(phi1);
-			float z1 = sin(theta) * cos(phi1);
-			float x2 = cos(theta) * cos(phi2);
-			float y2 = sin(phi2);
-			float z2 = sin(theta) * cos(phi2);
-			glNormal3f(x1, y1, z1);
-			glVertex3f(r * x1, r * y1, r * z1);
-			glNormal3f(x2, y2, z2);
-			glVertex3f(r * x2, r * y2, r * z2);
+			float u = (float)j / slices;      // 0..1 around
+			float th = 2.f * (float)M_PI * u;
+
+			float x1 = cosf(th) * cosf(phi1), y1 = sinf(phi1), z1 = sinf(th) * cosf(phi1);
+			float x2 = cosf(th) * cosf(phi2), y2 = sinf(phi2), z2 = sinf(th) * cosf(phi2);
+
+			glNormal3f(x1, y1, z1); glTexCoord2f(u, v1); glVertex3f(r * x1, r * y1, r * z1);
+			glNormal3f(x2, y2, z2); glTexCoord2f(u, v2); glVertex3f(r * x2, r * y2, r * z2);
 		}
 		glEnd();
 	}
-	gluDeleteQuadric(quad);
+
+	gPrim.tristrip += stacks;
 }
+
 
 void drawUnlitSphere(float x, float y, float z, float r, float cr, float cg, float cb) {
 	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LIGHTING_BIT);
@@ -757,21 +1058,25 @@ void drawLine(const float a[3], const float b[3]) {
 	glVertex3f(b[0], b[1], b[2]);
 	glEnd();
 	glPopAttrib();
+	gPrim.lines += 1;
 }
 
 
 // --- Helper: feather plume ---
 void drawFeather(float h = 1.5f, float w = 0.1f) {
 	useCloth(0.9f, 0.1f, 0.1f); // red plume
+	UseSlot(TEX_CLOTH);
 	glPushMatrix();
 	glScalef(w, h, w);
 	drawSphere(1.0);  // stretched sphere = feather
 	glPopMatrix();
+	UnbindTex();
 }
 
 // Curved cheek wrap around back & sides of the head
 void drawCheekWrap(const HumanDims& d) {
 	useMetal();
+	UseSlot(TEX_METAL);
 
 	// Vertical position of the wrap (a bit below head center)
 	const float y = -d.headR * 0.20f;
@@ -825,6 +1130,7 @@ void drawCheekWrap(const HumanDims& d) {
 		);
 		glPopMatrix();
 	}
+	UnbindTex();
 }
 
 
@@ -839,7 +1145,7 @@ void drawHelmet(const HumanDims& d) {
 	glTranslatef(0.f, d.headR, 0.f);           // now we're at head center
 
 	useMetal();
-
+	UseSlot(TEX_SHINY);
 	// ---- Dome geometry (relative to head center) ----
 	const float domeR = d.headR * 1.20f;    // hemisphere radius
 	const float domeBaseY = d.headR * 0.20f;    // base ring above head center
@@ -850,17 +1156,21 @@ void drawHelmet(const HumanDims& d) {
 	glTranslatef(0.f, domeBaseY, 0.f);
 	drawHemisphere(domeR);
 	glPopMatrix();
+	UnbindTex();
 
 	// Cheek wrap (expects origin at head center)
 	drawCheekWrap(d);
+	
 
 	// Rear neck guard (designed around head center)
+	UseSlot(TEX_SHINY);
 	glPushMatrix();
 	glTranslatef(0.f, -d.headR * 1.0f, -d.headR * 0.6f);
 	glRotatef(-20.f, 1, 0, 0);
 	drawTrapezoidBlock(d.headR * 2.0f, d.headR * 1.4f, d.headR * 0.6f,
 		d.headR * 0.5f, d.headR * 0.3f);
 	glPopMatrix();
+	UnbindTex();
 
 	// Center plume + socket (relative to dome top)
 	{
@@ -896,46 +1206,169 @@ void drawShoulderPadAt(const HumanDims& d, bool left) {
 	glPushMatrix();
 	glTranslatef(x, y, 0.f);
 	glRotatef(-side * 8.f, 0, 0, 1);
+	UseSlot(TEX_SHINY);
 	drawShoulderPadPiece(d.shoulderW, d.chestH * 0.18f, d.chestD);
+	UnbindTex();
 	glTranslatef(0, d.chestH * 0.12f, 0);
+	UseSlot(TEX_METAL);
 	drawShoulderPadPiece(d.shoulderW * 0.9, d.chestH * 0.14f, d.chestD * 0.9);
+	UnbindTex();
 	glPopMatrix();
 }
 
 // ---------- Chest/back plate + belt ----------
 void drawCuirass(const HumanDims& d) {
 	useMetal();
+	UseSlot(TEX_METAL);
 	const float chestCenterY = d.pelvisH * 0.5f + d.chestH * 0.5f;
 
-	// front plate (thin, in front of chest)
 	glPushMatrix();
 	glTranslatef(0.f, chestCenterY, d.chestD * 0.52f + Z_EPS);
-	drawTrapezoidBlock(d.shoulderW * 0.80f, d.shoulderW * 0.95f,
-		d.chestH * 0.98f, d.chestD * 0.02f, d.chestD * 0.02f);
+	drawTrapezoidBlock(d.shoulderW * 0.80f, d.shoulderW * 0.95f, d.chestH * 0.98f, d.chestD * 0.02f, d.chestD * 0.02f);
 	glPopMatrix();
 
-	// back plate (behind chest)
 	glPushMatrix();
 	glTranslatef(0.f, chestCenterY, -(d.chestD * 0.52f + Z_EPS));
-	drawTrapezoidBlock(d.shoulderW * 0.80f, d.shoulderW * 0.95f,
-		d.chestH * 0.98f, d.chestD * 0.02f, d.chestD * 0.02f);
+	drawTrapezoidBlock(d.shoulderW * 0.80f, d.shoulderW * 0.95f, d.chestH * 0.98f, d.chestD * 0.02f, d.chestD * 0.02f);
 	glPopMatrix();
+	UnbindTex();                              
 
-	// belt around upper pelvis
-	useMetal(0.85f, 0.55f, 0.20f);
+	useMetal();
+	UseSlot(TEX_SHINY);
 	glPushMatrix();
-	const float beltY = d.pelvisH * 0.25f;      // a bit below waist
+	const float beltY = d.pelvisH * 0.25f;
 	glTranslatef(0.f, beltY, 0.f);
-	drawBlock(d.pelvisW * 1.05f, d.pelvisH * 0.18f, d.pelvisD * 1.02f);
+	drawBlock(d.pelvisW * 0.84f, d.pelvisH * 0.18f, d.pelvisD * 1.22f);
+	// --- decorative belt holes (points) on the FRONT face ---
+	{
+		const float w = d.pelvisW * 0.8f;     // same as belt width
+		const float h = d.pelvisH * 0.18f;    // same as belt height
+		const float dep = d.pelvisD * 1.22f;    // same as belt depth
+
+		const float yRow = 0.05f * h;         // slightly above belt center
+		const float zFront = 0.5f * dep + Z_EPS * 2.f; // sit on front surface (+ tiny lift)
+
+		const int   holes = 9;                 // number of holes
+		const float margin = 0.12f * w;         // inset from belt edges
+		const float usable = w - 2.f * margin;
+
+		glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT | GL_CURRENT_BIT | GL_POINT_BIT | GL_DEPTH_BUFFER_BIT);
+		glDisable(GL_LIGHTING);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glEnable(GL_DEPTH_TEST);
+
+		glPointSize(5.5f);
+		glColor3f(0.08f, 0.08f, 0.08f);        // dark holes
+
+		glBegin(GL_POINTS);
+		int placed = 0;
+		for (int i = 0; i < holes; ++i) {
+			float t = (holes == 1) ? 0.5f : (float)i / (float)(holes - 1);
+			float x = -0.5f * w + margin + usable * t;
+			glVertex3f(x, yRow, zFront);
+			++placed;
+		}
+		glEnd();
+		glPopAttrib();
+
+		gPrim.points += placed;
+	}
 	glPopMatrix();
+	UnbindTex();
 }
 
-// ---------- Layered skirt / tassets (front/back + sides) ----------
+// ---------- Forearm bracer (call inside right/left arm local space after elbow) ----------
+void drawForearmBracer(const HumanDims& d) {
+	useMetal();
+	UseSlot(TEX_SHINY);
+	glPushMatrix();
+	glTranslatef(0.f, -d.forearmL * 0.35f, 0.f);
+
+	// ---- original bracer ----
+	const float h = d.forearmL * 0.7f;           // length
+	const float r0 = d.armLimbR * 1.15f;          // base radius (near elbow)
+	const float r1 = d.armLimbR * 1.10f;          // tip radius (toward wrist)
+	drawYCylinder(r0, r1, h);
+
+	// ---- decorative overlays: line strips + points ----
+	{
+		const int   slices = noOfSides;
+		const float lift = d.armLimbR * 0.02f;  // tiny radial lift to avoid z-fight
+		const float thStep = float(2.0 * M_PI) / float(slices);
+
+		// unlit, no texture, darker color
+		glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT | GL_CURRENT_BIT | GL_LINE_BIT | GL_POINT_BIT);
+		glDisable(GL_LIGHTING);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glColor3f(0.08f, 0.08f, 0.08f);
+
+		// Helper to get radius along Y (linear taper)
+		auto rAt = [&](float t) -> float {
+			return (1.0f - t) * r0 + t * r1 + lift;
+			};
+
+		// ---- circumferential ring near the top ----
+		{
+			const float t = 0.2f; // 0..1 along +Y
+			const float y = t * h;
+			const float rr = rAt(t);
+
+			glLineWidth(10.0f);
+			glBegin(GL_LINE_STRIP);
+			for (int j = 0; j <= slices; ++j) {
+				float th = j * thStep;
+				glVertex3f(rr * cosf(th), y, rr * sinf(th));
+			}
+			glEnd();
+			gPrim.linestrip += 1;
+		}
+
+		// ---- circumferential ring near the bottom ----
+		{
+			const float t = 0.15f;
+			const float y = t * h;
+			const float rr = rAt(t);
+
+			glBegin(GL_LINE_STRIP);
+			for (int j = 0; j <= slices; ++j) {
+				float th = j * thStep;
+				glVertex3f(rr * cosf(th), y, rr * sinf(th));
+			}
+			glEnd();
+			gPrim.linestrip += 1;
+		}
+
+		glPopAttrib();
+	}
+
+	glPopMatrix();
+	UnbindTex();
+}
+
+
+// ---------- Greave + knee plate (call inside leg local space after knee) ----------
+void drawShinGreave(const HumanDims& d) {
+	useMetal();
+	UseSlot(TEX_SHINY);
+	// shin tube
+	glPushMatrix();
+	glTranslatef(0.f, -d.lowerLegL * 0.35f, 0.f);
+	drawYCylinder(d.legLimbR * 1.15f, d.legLimbR * 1.25f, d.lowerLegL * 0.8f);
+	glPopMatrix();
+	// knee cap
+	glPushMatrix();
+	drawSphere(d.legLimbR * 0.65f);
+	glPopMatrix();
+	UnbindTex();
+}
+
+// ---------- Layered skirt / tassets (front/back) ----------
 void drawSkirtArmor(const HumanDims& d) {
 	const float waistY = d.pelvisH * 0.5f;
 
 	// cloth front / back
-	useCloth(0.75f, 0.15f, 0.15f);
+	useMetal();
+	UseSlot(TEX_METAL);
 	glPushMatrix();
 	glTranslatef(0.f, waistY - d.pelvisH * 0.25f, d.pelvisD * 0.55f + Z_EPS);
 	drawTrapezoidBlock(d.pelvisW * 0.90f, d.pelvisW * 0.70f,
@@ -947,59 +1380,139 @@ void drawSkirtArmor(const HumanDims& d) {
 	drawTrapezoidBlock(d.pelvisW * 0.90f, d.pelvisW * 0.70f,
 		d.upperLegL * 0.70f, d.pelvisD * 0.02f, d.pelvisD * 0.02f);
 	glPopMatrix();
-}
-
-// ---------- Forearm bracer (call inside right/left arm local space after elbow) ----------
-void drawForearmBracer(const HumanDims& d) {
-	useMetal();
-	glPushMatrix();
-	glTranslatef(0.f, -d.forearmL * 0.35f, 0.f);
-	drawYCylinder(d.armLimbR * 1.15f, d.armLimbR * 1.10f, d.forearmL * 0.7f);
-	glPopMatrix();
-}
-
-// ---------- Greave + knee plate (call inside leg local space after knee) ----------
-void drawShinGreave(const HumanDims& d) {
-	useMetal();
-	// shin tube
-	glPushMatrix();
-	glTranslatef(0.f, -d.lowerLegL * 0.35f, 0.f);
-	drawYCylinder(d.legLimbR * 1.15f, d.legLimbR * 1.25f, d.lowerLegL * 0.8f);
-	glPopMatrix();
-	// knee cap
-	glPushMatrix();
-	drawSphere(d.legLimbR * 0.65f);
-	glPopMatrix();
+	UnbindTex();
 }
 
 void drawCenterTasset(const HumanDims& d) {
 	useMetal();
+	UseSlot(TEX_SHINY);
+
 	const float waistY = d.pelvisH * 0.5f;
+
 	glPushMatrix();
-	glTranslatef(0.f, waistY - d.pelvisH * 0.25f, d.pelvisD * 0.58f + Z_EPS);
-	drawTrapezoidBlock(d.pelvisW * 0.45f, d.pelvisW * 0.28f,
-		d.upperLegL * 0.55f, d.pelvisD * 0.06f, d.pelvisD * 0.04f);
+	const float tz = d.pelvisD * 0.06f;
+	glTranslatef(0.f, waistY - d.pelvisH * 0.25f, 0.61f * d.pelvisD + 0.5f * tz + Z_EPS);
+
+	// --- symmetric footprint (centered) ---
+	const float plateH = d.upperLegL * 0.55f;
+	const float plateBottomW = d.pelvisW * 0.45f;
+	const float plateTopW = d.pelvisW * 0.28f;
+	const float plateW = 0.5f * (plateBottomW + plateTopW); // symmetric width
+
+	// old ellipse radii (kept only to choose the limiting dimension)
+	const float rx = plateW * 0.48f;
+	const float ry = plateH * 0.48f;
+
+	// Use a single radius so the octagon is regular (equal side lengths)
+	const float R = (rx < ry ? rx : ry);         // or std::fmin(rx, ry)
+
+	// thickness so it has depth (extrusion along +Z/-Z locally)
+	const float zBack = -0.5f * tz;
+	const float zFront = +0.5f * tz;
+
+	// -------- regular-octagon vertices (centered, flats horizontal) --------
+	double vx[8], vy[8];
+	{
+		const double th0 = M_PI / 8.0;           // start so flats are horizontal
+		const double dth = M_PI / 4.0;           // 45° steps
+		for (int i = 0; i < 8; ++i) {
+			double th = th0 + i * dth;
+			vx[i] = R * cos(th);
+			vy[i] = R * sin(th);
+		}
+	}
+
+	// ---- front face (polygon) ----
+	glNormal3f(0.f, 0.f, 1.f);
+	glBegin(GL_POLYGON);
+	for (int i = 0; i < 8; ++i) {
+		// circular UV so it doesn’t skew when rx≠ry
+		double u = 0.5 + 0.5 * (vx[i] / R);
+		double v = 0.5 + 0.5 * (vy[i] / R);
+		glTexCoord2d(u, v);
+		glVertex3d(vx[i], vy[i], zFront);
+	}
+	glEnd();
+	gPrim.polygon += 1;
+
+	// ---- back face (polygon) ----
+	glNormal3f(0.f, 0.f, -1.f);
+	glBegin(GL_POLYGON);
+	for (int i = 7; i >= 0; --i) { // reverse winding so the normal points outward
+		double u = 0.5 + 0.5 * (vx[i] / R);
+		double v = 0.5 + 0.5 * (vy[i] / R);
+		glTexCoord2d(u, v);
+		glVertex3d(vx[i], vy[i], zBack);
+	}
+	glEnd();
+	gPrim.polygon += 1;
+
+	// ---- side wall quads to close the extrusion ----
+	glBegin(GL_QUADS);
+	for (int i = 0; i < 8; ++i) {
+		int j = (i + 1) & 7;
+		// face-normal for the side (approx: outward in XY, no Z)
+		double nx = (vy[j] - vy[i]);
+		double ny = -(vx[j] - vx[i]);
+		double len = sqrt(nx * nx + ny * ny);
+		if (len > 1e-9) { nx /= len; ny /= len; }
+		glNormal3d(nx, ny, 0.0);
+
+		glTexCoord2d(0, 0); glVertex3d(vx[i], vy[i], zFront);
+		glTexCoord2d(1, 0); glVertex3d(vx[j], vy[j], zFront);
+		glTexCoord2d(1, 1); glVertex3d(vx[j], vy[j], zBack);
+		glTexCoord2d(0, 1); glVertex3d(vx[i], vy[i], zBack);
+	}
+	glEnd();
+	UnbindTex();
+	gPrim.quads += 8;
+
+
+	// ---- near-edge outline (line loop) on the FRONT face ----
+	{
+		const float outlineScale = 0.96f;        // closer to 1 => nearer the edge
+		const float Ro = R * outlineScale;
+
+		glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LIGHTING_BIT | GL_LINE_BIT);
+		glDisable(GL_LIGHTING);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glLineWidth(5.0f);
+		glColor3f(0.3f, 0.3f, 0.3f);
+
+		glBegin(GL_LINE_LOOP);
+		for (int i = 0; i < 8; ++i) {
+			double th = M_PI / 8.0 + i * (M_PI / 4.0);
+			glVertex3d(Ro * cos(th), Ro * sin(th), zFront + 0.001); // tiny lift to avoid z-fight
+		}
+		glEnd();
+		glPopAttrib();
+
+		gPrim.lineloop += 1;
+	}
+
 	glPopMatrix();
+	
 }
 
 void drawUpperArmPlate(const HumanDims& d) {
-	useMetal();
-	glPushMatrix();               // upper arm local spacea
-	glTranslatef(0.f, -d.upperArmL * 0.1f, 0.f);
-	drawYCylinder(d.armLimbR * 1.10f, d.armLimbR * 1.5f, d.upperArmL * 1.3f);
-	//drawBlock(d.armLimbR * 3.f, d.upperArmL * 0.7f, d.armLimbR * 3.f);
+	useCloth();
+	UseSlot(TEX_CLOTH);
+	glPushMatrix();              
+	drawYCylinder(d.armLimbR * 1.10f, d.armLimbR * 1.5f, d.upperArmL * 1.f);
 	glPopMatrix();
+	UnbindTex();
 }
 
 void drawSabaton(const HumanDims& d) {
 	useMetal();
+	UseSlot(TEX_SHINY);
 	glPushMatrix();
 	glTranslatef(0.f, 0.f, d.footD * 0.35f);
 	drawTrapezoidBlock(d.footW * 1.1f, d.footW * 1.1f,
 		d.footH * 1.2f, d.footD * 1.0f, d.footD * 1.1f);
 	glPopMatrix();
+	UnbindTex();
 }
-
 
 void drawJoint(float r) {
 	drawSphere(r);
@@ -1015,7 +1528,8 @@ void drawLimbSegment(float br, float tr, float len) {
 void drawTorso(const HumanDims& d) {
 	// pelvis is centered at current origin
 	// bottomW > topW for pelvis taper
-	useNeutral();
+	useCloth();
+	UseSlot(TEX_CLOTH);
 	drawTrapezoidBlock(
 		d.pelvisW,                 // bottom width
 		d.pelvisW * 0.7f,          // top width (slimmer waist)
@@ -1023,13 +1537,15 @@ void drawTorso(const HumanDims& d) {
 		d.pelvisD,                 // bottom depth
 		d.pelvisD * 0.8f           // top depth
 	);
+	UnbindTex();
 
 	// chest center = pelvis_full/2 + chest_half
 	float chestCenterY = (d.pelvisH + d.chestH) * 0.5f;
 	glPushMatrix();
 	glTranslatef(0.f, chestCenterY, 0.f);
 	// chest tapers opposite: top wider than bottom (shoulders broader)
-	useNeutral();
+	useCloth();
+	UseSlot(TEX_CLOTH);
 	drawTrapezoidBlock(
 		d.shoulderW * 0.7f,    // bottom width (narrower near waist)
 		d.shoulderW,           // top width (broad shoulders)
@@ -1037,6 +1553,7 @@ void drawTorso(const HumanDims& d) {
 		d.chestD * 0.7f,       // bottom depth
 		d.chestD               // top depth
 	);
+	UnbindTex();
 	glPopMatrix();
 
 	// neck center = pelvis_full + chest_full + neck_half
@@ -1183,10 +1700,12 @@ void drawSword(
 
 	glPushMatrix();
 	glRotatef(180.f, 1.f, 0.f, 0.f);
+	glRotatef(90.f, 0.f, 1.f, 0.f);
 	glTranslatef(0.f, 0.5f, 0.0f);
 
 	// ------- CROSSGUARD (sits above the grip, top at y=guardH) -------
 	useMetal(0.82f, 0.82f, 0.87f);
+	UseSlot(TEX_SHINY);
 	glPushMatrix();
 	glTranslatef(0.f, guardH * 0.5f, 0.f);
 	drawBlock(guardW, guardH, guardD);           // central block
@@ -1203,32 +1722,40 @@ void drawSword(
 	drawBlock(guardW * 0.60f, guardH * 0.35f, guardD * 0.60f);
 	glPopMatrix();
 	glPopMatrix();
+	UnbindTex();
 
 	// ------- GRIP -------
 	useCloth(0.25f, 0.12f, 0.08f);
+	UseSlot(TEX_LEATHER);
 	glPushMatrix();
 	glTranslatef(0.f, 0.0f, 0.f);         // base at -handleL
 	drawYCylinder(gripR, gripR, handleL + EPS);      // reaches (slightly past) y=0
 	glPopMatrix();
+	UnbindTex();
 
 
 	// small metal rings on grip
 	useMetal(0.78f, 0.78f, 0.83f);
+	UseSlot(TEX_SHINY);
 	glPushMatrix(); glTranslatef(0.f, -0.15f, 0.f);
 	drawYCylinder(gripR * 1.07f, gripR * 1.07f, 0.03f);
 	glPopMatrix();
 	glPushMatrix(); glTranslatef(0.f, -handleL + 0.15f, 0.f);
 	drawYCylinder(gripR * 1.07f, gripR * 1.07f, 0.03f);
 	glPopMatrix();
+	UnbindTex();
 
 	// ------- POMMEL -------
+	UseSlot(TEX_SHINY);
 	glPushMatrix();
-	glTranslatef(0.f, -handleL - pommelH * 0.5f - EPS, 0.f);
+	glTranslatef(0.f, -handleL, 0.f);
 	drawYCylinder(pommelR * 0.85f, pommelR, pommelH + EPS);
 	glPopMatrix();
+	UnbindTex();
 
 	// ------- BLADE -------
 	useMetal(0.86f, 0.86f, 0.91f);
+	UseSlot(TEX_SILVER);
 
 	const float ricassoL = 0.25f;
 	const float tipL = bladeL * 0.22f;
@@ -1255,15 +1782,8 @@ void drawSword(
 		(thick0 + thick1) * 0.5f, thick1);
 	glPopMatrix();
 
-	// fuller (shallow groove) – darker metal, inset to avoid z-fight
-	useMetal(0.65f, 0.67f, 0.72f);
-	float fullerL = midL * 0.75f;
-	glPushMatrix();
-	glTranslatef(0.f, guardH + ricassoL + fullerL * 0.5f, 0.f);
-	drawBlock(baseW * 0.34f, fullerL, thick0 * 0.32f);
 	glPopMatrix();
-
-	glPopMatrix();
+	UnbindTex();
 }
 
 void drawSpear(float shaftL = 9.0f, float shaftR = 0.09f, float holdFracFromButt = 0.5f)
@@ -1277,64 +1797,69 @@ void drawSpear(float shaftL = 9.0f, float shaftR = 0.09f, float holdFracFromButt
 	useWood();
 	glPushMatrix();
 		glTranslatef(0.f, buttY, 0.f);           // start at the butt
+		UseSlot(TEX_WOOD);
 		drawYCylinder(shaftR, shaftR, shaftL);   // runs to the tip
 	glPopMatrix();
+	UnbindTex();
 
 	// Butt cap (little metal piece at the very end)
 	useMetal(0.7f, 0.7f, 0.75f);
+	UseSlot(TEX_SHINY);
 	glPushMatrix();
 		glTranslatef(0.f, buttY - 0.02f, 0.f);
 		drawYCylinder(shaftR * 1.05f, shaftR * 1.05f, 0.12f);
 	glPopMatrix();
+	UnbindTex();
 
 	// Hand wrap centered on the grip (origin)
 	useCloth(0.35f, 0.18f, 0.12f); // leather-ish
+	UseSlot(TEX_LEATHER);
 	glPushMatrix();
 		glTranslatef(0.f, -0.15f, 0.f);
 		drawYCylinder(shaftR * 1.1f, shaftR * 1.1f, 2.0f);
 	glPopMatrix();
+	UnbindTex();
 
 	glPushMatrix();
 	glRotatef(180.f, 1.f, 0.f, 0.f);
 
 	// Ferrule under the head
 	useMetal();
+	UseSlot(TEX_SHINY);
 	glPushMatrix();
 	glTranslatef(0.f, tipY - 0.45f, 0.f);
 	drawYCylinder(shaftR * 1.12f, shaftR * 1.12f, 0.22f);
 	glPopMatrix();
+	UnbindTex();
 
 	// Small square collar
+	UseSlot(TEX_SHINY);
 	glPushMatrix();
 	glTranslatef(0.f, tipY - 0.05f, 0.f);
 	drawBlock(shaftR * 3.0f, 0.15f, shaftR * 3.0f);
 	glPopMatrix();
+	UnbindTex();
 
 	// --- SPEAR HEAD (leaf/diamond) ---
 	useMetal(0.85f, 0.85f, 0.90f);
-
+	UseSlot(TEX_SILVER);
 	// main leaf to the tip
 	const float bladeH = 1.9f;
 	glPushMatrix();
 	glTranslatef(0.f, tipY + bladeH * 0.5f, 0.f); // bottom sits at tipY
-	drawTrapezoidBlock(
-		/*bottomW*/ shaftR * 2.6f,  /*topW*/ 0.0f,
-		/*h*/       bladeH,
-		/*bottomD*/ shaftR * 1.2f,  /*topD*/ 0.0f
-	);
+	drawPyramid(shaftR * 2.6, shaftR * 1.2, bladeH, true);
 	glPopMatrix();
-
-	// small back taper to give a diamond profile (optional)
-	glPushMatrix();
-	glTranslatef(0.f, tipY - 0.20f, 0.f);
-	drawTrapezoidBlock(shaftR * 2.0f, 0.0f, 0.40f, shaftR * 0.9f, 0.0f);
-	glPopMatrix();
+	UnbindTex();
 
 	glPopMatrix();
 	glPopMatrix();
 }
 
-void drawArm(const HumanDims& d, bool left, float shoulder_rx_deg = 0.f, float elbow_rx_deg = 0.f) {
+void drawArm(const HumanDims& d, bool left,
+	float shx = 0.f, float shy = 0.f, float shz = 0.f,
+	float elx = 0.f,
+	float wristx = 0.f, float wristy = 0.f, float wristz = 0.f)
+{
 	float side = left ? -1.f : 1.f;
 	float shoulderX = side * (d.shoulderW * 0.5f + d.armJointR * 0.5);
 	float shoulderY = (d.pelvisH * 0.5f) + d.chestH - d.armJointR * 0.5;
@@ -1342,46 +1867,51 @@ void drawArm(const HumanDims& d, bool left, float shoulder_rx_deg = 0.f, float e
 	glPushMatrix();
 	glTranslatef(shoulderX, shoulderY, 0.f);
 
-	//glRotatef(side * 90.f, 0.f, 0.f, 1.f); // rotate arm out to the side
-
-	// upper arm
 	if (g_mode == MODE_RIG) {
-		// shoulder: full XYZ
 		applyJointRot(left ? J_SHOULDER_L : J_SHOULDER_R);
 	}
 	else {
-		glRotatef(shoulder_rx_deg, 1.f, 0.f, 0.f);
+		glRotatef(shx, 1.f, 0.f, 0.f);
+		glRotatef(shy, 0.f, 1.f, 0.f);
+		glRotatef(shz, 0.f, 0.f, 1.f);  // ← shoulder “raise horizontally outwards”
 	}
-	if (g_armorOn) drawUpperArmPlate(d);
-	useSkin();
-	drawLimbSegment(d.armLimbR, d.armLimbR, d.upperArmL);
 
-	// forearm + hand
+	if (g_armorOn) drawUpperArmPlate(d);
+	useCloth();
+	UseSlot(TEX_CLOTH);
+	drawLimbSegment(d.armLimbR, d.armLimbR, d.upperArmL);
+	UnbindTex();
+
+	// elbow
 	glTranslatef(0.f, -d.upperArmL, 0.f);
 	if (g_mode == MODE_RIG) {
-		// elbow: hinge (use X only)
-		glRotatef(gJ[left ? J_ELBOW_L : J_ELBOW_R][0], 1, 0, 0);
+		applyJointRot(left ? J_ELBOW_L : J_ELBOW_R); // full X,Y,Z
 	}
 	else {
-		glRotatef(elbow_rx_deg, 1.f, 0.f, 0.f);
+		glRotatef(elx, 1.f, 0.f, 0.f);
 	}
 
-	// NEW: forearm bracer that follows elbow rotation
 	if (g_armorOn) drawForearmBracer(d);
 	useSkin();
 	drawLimbSegment(d.armLimbR, d.armLimbR, d.forearmL);
+
+	// wrist + hand
 	glTranslatef(0.f, -(d.forearmL), 0.f);
-	// keep the hand centered as before (you had +handH*0.5f later for the block)
 	if (g_mode == MODE_RIG) {
 		applyJointRot(left ? J_WRIST_L : J_WRIST_R);
+	}
+	else {
+		glRotatef(wristx, 1.f, 0.f, 0.f);
+		glRotatef(wristy, 0.f, 1.f, 0.f);
+		glRotatef(wristz, 0.f, 0.f, 1.f);
 	}
 	glTranslatef(0.f, -(d.handH * 0.5f), 0.f);
 	drawBlock(d.handW, d.handH, d.handD);
 
 	if (!left) {
 		glPushMatrix();
-		glTranslatef(0.f, -d.handH * 0.5f, 0.f);   // attach at bottom of hand
-		glRotatef(-90.f, 1.f, 0.f, 0.f);          // rotate blade to point forward
+		glTranslatef(0.f, -d.handH * 0.5f, 0.f);
+		glRotatef(-90.f, 1.f, 0.f, 0.f);
 		if (weaponType == 0) drawSword();
 		else                 drawSpear();
 		glPopMatrix();
@@ -1403,23 +1933,27 @@ void drawLeg(const HumanDims& d, bool left, float hip_rx_deg = 0.f, float knee_r
 	else {
 		glRotatef(-hip_rx_deg, 1.f, 0.f, 0.f);
 	}
-	useNeutral();
+	useCloth();
+	UseSlot(TEX_CLOTH);
 	drawLimbSegment(d.legLimbR, d.legLimbR, d.upperLegL);
 
 	// knee
 	glTranslatef(0.f, -d.upperLegL, 0.f);
 	if (g_mode == MODE_RIG) {
-		glRotatef(gJ[left ? J_KNEE_L : J_KNEE_R][0], 1, 0, 0);  // hinge X
+		applyJointRot(left ? J_KNEE_L : J_KNEE_R); // full X,Y,Z
 	}
 	else {
 		glRotatef(-knee_rx_deg, 1.f, 0.f, 0.f);
 	}
+	UnbindTex();
 
 	// NEW: greave
 	if (g_armorOn) drawShinGreave(d);
 	useNeutral();
 
 	// shin
+	useCloth();
+	UseSlot(TEX_CLOTH);
 	drawLimbSegment(d.legLimbR, d.legLimbR, d.lowerLegL);
 
 	// move to ankle joint (top of foot), apply ankle, then place the foot block
@@ -1427,6 +1961,7 @@ void drawLeg(const HumanDims& d, bool left, float hip_rx_deg = 0.f, float knee_r
 	if (g_mode == MODE_RIG) {
 		applyJointRot(left ? J_ANKLE_L : J_ANKLE_R); // full XYZ
 	}
+	UnbindTex();
 
 	// foot (drop to foot center and push slightly forward)
 	glTranslatef(0.f, -d.footH * 0.5f, d.footD * 0.25f);
@@ -1441,7 +1976,9 @@ void drawGround(float size = 20.f, int steps = 10) {
 	for (int i = -steps; i <= steps; ++i) {
 		float t = (size / steps) * i;
 		glVertex3f(-size, 0.f, t); glVertex3f(size, 0.f, t);
+		gPrim.lines += 1;
 		glVertex3f(t, 0.f, -size); glVertex3f(t, 0.f, size);
+		gPrim.lines += 1;
 	}
 	glEnd();
 }
@@ -1490,8 +2027,101 @@ void drawHuman(const HumanDims& d, float walkPhaseDeg = 0.f, bool walking = fals
 	if (g_armorOn) drawHelmet(d);
 
 	// Arms
-	drawArm(d, true, shL, elL);   // left arm
-	drawArm(d, false, shR, elR);   // right arm
+	// Arms
+	if (g_mode == MODE_CHAR && g_attackActive) {
+		float t = g_attackT;
+		const float raiseEnd = 0.45f;
+
+		if (weaponType == 1) {
+			// ---- SPEAR ATTACK ----
+			float shx = 0.f, shy = 0.f, shz = 0.f;
+			float elx = 0.f;
+			float wx = 0.f, wy = 0.f, wz = 0.f;
+
+			const float raiseEnd = 0.45f;  // already used
+			const float thrustEnd = 0.80f;  // end of forward thrust, start of recovery
+
+			// keyframes (X only)
+			const float shx_raise = +80.f;  // shoulder at end of raise
+			const float elx_raise = -80.f;  // elbow at end of raise
+			const float wx_raise = 0.f;
+
+			const float shx_thrust = -85.f; // forward reach
+			const float elx_thrust = 0.f;   // straight arm
+			const float wx_thrust = +90.f; // spear vertical (adjust sign if needed)
+
+			if (t < raiseEnd) {
+				// RAISE
+				float u = smooth01(t / raiseEnd);
+				shx = shx_raise * u;
+				elx = elx_raise * u;
+				wx = wx_raise * u;  // stays 0 anyway
+			}
+			else if (t < thrustEnd) {
+				// THRUST
+				float u = smooth01((t - raiseEnd) / (thrustEnd - raiseEnd));
+				shx = shx_raise + (shx_thrust - shx_raise) * u;
+				elx = elx_raise + (elx_thrust - elx_raise) * u;
+				wx = wx_raise + (wx_thrust - wx_raise) * u;
+			}
+			else {
+				// RECOVER back to neutral (0) to avoid snapping when the anim ends
+				float u = smooth01((t - thrustEnd) / (1.0f - thrustEnd));
+				shx = shx_thrust * (1.0f - u);   // -> 0
+				elx = elx_thrust * (1.0f - u);   // -> 0
+				wx = wx_thrust * (1.0f - u);   // -> 0
+			}
+
+			// left arm idle, right arm performs the attack
+			drawArm(d, true, -0.f, 0.f, 0.f, 0.f);
+			drawArm(d, false, shx, /*shy*/0.f, /*shz*/0.f, elx, /*wristX*/wx, /*wY*/0.f, /*wZ*/0.f);
+			glPopMatrix();
+			return;
+		}
+		else {
+			// ---- SWORD (X-only with smooth recovery) ----
+			float shx = 0.f, elx = 0.f;
+
+			const float windupEnd = 0.35f;   // end of windup
+			const float swingEnd = 0.70f;   // end of strike, start of recovery
+
+			// Key poses (X axis only)
+			const float shx_windup = -160.f; // big windup back
+			const float elx_windup = -30.f; // slight bend
+
+			const float shx_hit = +40.f; // follow-through forward (tweak sign if needed)
+			const float elx_hit = -10.f; // small bend at impact
+
+			if (t < windupEnd) {
+				// WINDUP: neutral -> windup
+				float u = smooth01(t / windupEnd);
+				shx = (1.0f - u) * 0.f + u * shx_windup;
+				elx = (1.0f - u) * 0.f + u * elx_windup;
+			}
+			else if (t < swingEnd) {
+				// STRIKE: windup -> hit
+				float u = smooth01((t - windupEnd) / (swingEnd - windupEnd));
+				shx = shx_windup + (shx_hit - shx_windup) * u;
+				elx = elx_windup + (elx_hit - elx_windup) * u;
+			}
+			else {
+				// RECOVER: hit -> neutral (0) to avoid snapping when the anim flag resets
+				float u = smooth01((t - swingEnd) / (1.0f - swingEnd));
+				shx = shx_hit * (1.0f - u);   // -> 0
+				elx = elx_hit * (1.0f - u);   // -> 0
+			}
+
+			// left idle, right swings (X only; Y/Z stay 0)
+			drawArm(d, true, -0.f, 0.f, 0.f, 0.f);
+			drawArm(d, false, shx, 0.f, 0.f, elx);
+			glPopMatrix();
+			return;
+		}
+	}
+
+	// (no attack) – fallback:
+	drawArm(d, true, shL, 0.f, 0.f, elL);
+	drawArm(d, false, shR, 0.f, 0.f, elR);
 
 	glPopMatrix();
 }
@@ -1523,20 +2153,32 @@ void lighting() {
 }
 
 void demo() {
+	ResetPrimTally();
+	if (g_texturesEnabled) glEnable(GL_TEXTURE_2D);
+	else                   glDisable(GL_TEXTURE_2D);
 	// Per-frame keyboard handling for modes
 	handleInputPerFrame();
 
-	//setWire(true);
+	static const float GRID_HALF = 20.0f; // 40×40 square => x,z in [-20, 20]
+
 	if (isWalking) {
-		walkPhase += walkAnimSpeed;
+		float walkSpeed = walkAnimSpeed * (g_kShift ? 4.f : 1.0f);
+		walkPhase += walkSpeed;
 		if (walkPhase > 360.f) walkPhase -= 360.f;
 
-		// Move position
-		hx += walkDirX * humanSpeed;
-		hz += walkDirZ * humanSpeed;
+		float speed = humanSpeed * (g_kShift ? 3.f : 1.0f);
 
-		// Update facing angle (convert radians -> degrees)
-		humanAngle = atan2f(walkDirX, walkDirZ) * 180.0f / M_PI;
+		// propose
+		float nx = hx + walkDirX * speed;
+		float nz = hz + walkDirZ * speed;
+
+		// accept or block
+		if (fabsf(nx) <= GRID_HALF && fabsf(nz) <= GRID_HALF) {
+			hx = nx; hz = nz;
+		}
+		else {
+			isWalking = false; // blocked: stop animation, but facing already updated
+		}
 	}
 
 
@@ -1586,7 +2228,7 @@ void projection() {
 	glLoadIdentity();
 
 	if (isOrtho) {
-		glOrtho(-10, 10, -10, 10, 1, 100);
+		glOrtho(-10, 10, -10, 10, PNear, PFar);
 	}
 	else if (isPerspective) {
 		gluPerspective(60.0, 1.0, PNear, PFar);
@@ -1648,7 +2290,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow)
 
 	//	make context current
 	if (!wglMakeCurrent(hdc, hglrc)) return false;
-
+	LoadAllTextures();
 	BuildFont(hdc, 18, "Consolas"); // or "Courier New" if you prefer
 
 	//--------------------------------

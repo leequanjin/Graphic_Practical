@@ -22,7 +22,15 @@
     <Image Include="..\x64\Debug\brick.bmp" />
     <Image Include="..\x64\Debug\metal.bmp" />
     <Image Include="Box.bmp" />
+    <Image Include="brown_fabric.bmp" />
+    <Image Include="cloth_fabric.bmp" />
+    <Image Include="gold.bmp" />
     <Image Include="ice.bmp" />
+    <Image Include="metal_layered.bmp" />
+    <Image Include="roof_tile.bmp" />
+    <Image Include="shiny_black.bmp" />
+    <Image Include="shiny_metal.bmp" />
+    <Image Include="wood.bmp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="assignment.cpp" />

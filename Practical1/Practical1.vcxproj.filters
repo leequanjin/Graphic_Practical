@@ -27,6 +27,30 @@
     <Image Include="Box.bmp">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="brown_fabric.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="cloth_fabric.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="roof_tile.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="shiny_black.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="shiny_metal.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="metal_layered.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="wood.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="gold.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="assignment.cpp">
