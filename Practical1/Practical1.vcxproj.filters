@@ -51,6 +51,18 @@
     <Image Include="gold.bmp">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="red_sky.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="sky.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="storm.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="grass.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="assignment.cpp">

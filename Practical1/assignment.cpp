@@ -14,6 +14,15 @@
 enum InputMode { MODE_CAM = 1, MODE_CHAR = 2, MODE_RIG = 3 };
 int g_mode = MODE_CAM;
 
+// -------- Skybox / Scene --------
+enum Scene { SCN_STORM = 0, SCN_SUNNY = 1, SCN_RED = 2, SCN_MAX = 3 };
+bool   g_bgOn = true;              // Z to toggle skybox
+int    g_scene = SCN_SUNNY;        // X (outside RIG) to cycle scenes
+float  g_skySize = 200.0f;         // cube edge (big enough to enclose play area)
+
+// skybox textures per scene, faces order: +X, -X, +Y, -Y, +Z, -Z
+GLuint g_skyTex[SCN_MAX][6] = { {0} };
+
 // ---- Rig (per-joint control) ----
 enum RigJoint {
 	J_SPINE = 0,          // torso base
@@ -66,7 +75,7 @@ HWND g_hWnd = nullptr;
 // --- Bitmap font (wglUseFontBitmaps) ---
 GLuint g_fontBase = 0;
 HFONT  g_font = nullptr;
-GLuint gTexBrownFabric = 0, gTexClothFabric = 0, gTexMetalLayered = 0, gTexRoofTile = 0, gTexShinyBlack = 0, gTexShinyMetal = 0, gTexWood = 0, gTexGold = 0;
+GLuint gTexGrass = 0, gTexBrownFabric = 0, gTexClothFabric = 0, gTexMetalLayered = 0, gTexRoofTile = 0, gTexShinyBlack = 0, gTexShinyMetal = 0, gTexWood = 0, gTexGold = 0;
 
 int qNo = 1;
 
@@ -104,7 +113,7 @@ float sunSizeFill = 0.6f;
 float sunSizeKey = 0.8f;
 
 // projection parameters
-float PNear = 1.0, PFar = 100.0;
+float PNear = 1.0, PFar = 150.0;
 const float CAM_Z_MIN = 5.0f;
 const float CAM_Z_MAX = 50.0f;
 bool isOrtho = false, isPerspective = true;
@@ -265,6 +274,28 @@ static inline void ResetCharacterDefaults() {
 	g_attackT = 0.f;
 }
 
+static void applySceneLightMood()
+{
+	switch (g_scene) {
+	case SCN_STORM: // stormy night: dark, bluish fill
+		ambientLevel = 0.20f;
+		fillColor[0] = 0.55f; fillColor[1] = 0.60f; fillColor[2] = 0.90f;
+		fillIntensity = 0.25f;
+		break;
+	case SCN_SUNNY: // bright day: clean white
+		ambientLevel = 0.70f;
+		fillColor[0] = 1.00f; fillColor[1] = 1.00f; fillColor[2] = 1.00f;
+		fillIntensity = 0.55f;
+		break;
+	case SCN_RED:   // warm/ominous
+		ambientLevel = 0.45f;
+		fillColor[0] = 1.00f; fillColor[1] = 0.55f; fillColor[2] = 0.45f;
+		fillIntensity = 0.45f;
+		break;
+	}
+}
+
+
 LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
@@ -299,6 +330,14 @@ LRESULT WINAPI WindowProcedure(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		if (wParam == VK_TAB) { weaponType = 1 - weaponType; break; }
 		if (wParam == 'V') { g_texturesEnabled = !g_texturesEnabled; break; }
 		if (wParam == 'I') { g_texPreset = (g_texPreset + 1) % TEX_PRESETS; break; }
+
+		// ---- Background / scene ----
+		if (wParam == 'Z') { g_bgOn = !g_bgOn; break; } // toggle skybox
+		if (g_mode != MODE_RIG && wParam == 'X') {     // cycle scenes
+			g_scene = (g_scene + 1) % SCN_MAX;
+			applySceneLightMood();
+			break;
+		}
 
 		// ---- PageUp/PageDown -> camera dolly Z ----
 		if (wParam == VK_PRIOR) {        // PageUp
@@ -491,6 +530,7 @@ static void LoadAllTextures() {
 	gTexShinyMetal = LoadTextureBMP("shiny_metal.bmp");
 	gTexWood = LoadTextureBMP("wood.bmp");
 	gTexGold = LoadTextureBMP("gold.bmp");
+	gTexGrass = LoadTextureBMP("grass.bmp");
 
 	// --- Preset 0: default ---
 	gTexPreset[0][TEX_WOOD] = gTexWood;
@@ -527,6 +567,32 @@ static void LoadAllTextures() {
 	gTexPreset[3][TEX_LEATHER] = gTexClothFabric;
 	gTexPreset[3][TEX_GOLD] = gTexShinyBlack;
 	gTexPreset[3][TEX_SILVER] = gTexShinyMetal;
+
+	// ---- Skybox textures ----
+// STORMY NIGHT
+	g_skyTex[SCN_STORM][0] = LoadTextureBMP("storm.bmp");
+	g_skyTex[SCN_STORM][1] = LoadTextureBMP("storm.bmp");
+	g_skyTex[SCN_STORM][2] = LoadTextureBMP("storm.bmp");
+	g_skyTex[SCN_STORM][3] = LoadTextureBMP("storm.bmp");
+	g_skyTex[SCN_STORM][4] = LoadTextureBMP("storm.bmp");
+	g_skyTex[SCN_STORM][5] = LoadTextureBMP("storm.bmp");
+
+	// SUNNY DAY
+	g_skyTex[SCN_SUNNY][0] = LoadTextureBMP("sky.bmp");
+	g_skyTex[SCN_SUNNY][1] = LoadTextureBMP("sky.bmp");
+	g_skyTex[SCN_SUNNY][2] = LoadTextureBMP("sky.bmp");
+	g_skyTex[SCN_SUNNY][3] = LoadTextureBMP("sky.bmp");
+	g_skyTex[SCN_SUNNY][4] = LoadTextureBMP("sky.bmp");
+	g_skyTex[SCN_SUNNY][5] = LoadTextureBMP("sky.bmp");
+
+	// RED SKY
+	g_skyTex[SCN_RED][0] = LoadTextureBMP("red_sky.bmp");
+	g_skyTex[SCN_RED][1] = LoadTextureBMP("red_sky.bmp");
+	g_skyTex[SCN_RED][2] = LoadTextureBMP("red_sky.bmp");
+	g_skyTex[SCN_RED][3] = LoadTextureBMP("red_sky.bmp");
+	g_skyTex[SCN_RED][4] = LoadTextureBMP("red_sky.bmp");
+	g_skyTex[SCN_RED][5] = LoadTextureBMP("red_sky.bmp");
+
 }
 
 static inline void BindTex(GLuint tex) {
@@ -674,6 +740,17 @@ void drawHUD() {
 		gPrim.lines, gPrim.linestrip, gPrim.lineloop);
 	y -= 18;
 
+	{
+		const char* scn =
+			(g_scene == SCN_STORM) ? "Stormy Night" :
+			(g_scene == SCN_SUNNY) ? "Sunny Day" : "Red Sky";
+		glRasterPos2i(10, y);
+		glPrint("Skybox: %s   Scene: %s",
+			g_bgOn ? "ON" : "OFF", scn);
+		y -= 18;
+		gap();
+	}
+
 	// Restore matrices/state
 	glPopMatrix(); // model
 	glMatrixMode(GL_PROJECTION);
@@ -683,6 +760,8 @@ void drawHUD() {
 }
 
 static inline float smooth01(float t) { t = max(0.f, min(1.f, t)); return t * t * (3.f - 2.f * t); }
+
+
 
 void setWire(bool on) {
 	glPolygonMode(GL_FRONT_AND_BACK, on ? GL_LINE : GL_FILL);
@@ -727,6 +806,91 @@ void handleInputPerFrame() {
 	}
 }
 
+// Helper to draw one skybox face (axis-aligned quad)
+static void skyFace(GLuint tex, float x0, float y0, float z0,
+	float x1, float y1, float z1,
+	float x2, float y2, float z2,
+	float x3, float y3, float z3)
+{
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glBegin(GL_QUADS);
+	glTexCoord2f(0, 0); glVertex3f(x0, y0, z0);
+	glTexCoord2f(1, 0); glVertex3f(x1, y1, z1);
+	glTexCoord2f(1, 1); glVertex3f(x2, y2, z2);
+	glTexCoord2f(0, 1); glVertex3f(x3, y3, z3);
+	glEnd();
+}
+
+// Draw skybox centered on the camera; render **before** world
+void drawSkyboxCube()
+{
+	if (!g_bgOn) return;
+
+	// cube sized safely within the far plane
+	const float edge = (float)PFar * 0.9f;
+	const float s = edge * 0.5f;               // half-edge
+	GLuint* T = g_skyTex[g_scene];
+
+	glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_DEPTH_BUFFER_BIT | GL_TEXTURE_BIT | GL_COLOR_BUFFER_BIT);
+	glDisable(GL_LIGHTING);
+	glEnable(GL_TEXTURE_2D);
+	glDisable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
+	glColor3f(1, 1, 1);
+	glDisable(GL_CULL_FACE);                   // we draw the inside
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	// Make skybox follow camera orientation
+	glRotatef(-camRotZ, 0.f, 0.f, 1.f);
+	glRotatef(-camRotY, 0.f, 1.f, 0.f);
+	glRotatef(-camRotX, 1.f, 0.f, 0.f);
+
+	auto face = [&](GLuint tex,
+		float x0, float y0, float z0,
+		float x1, float y1, float z1,
+		float x2, float y2, float z2,
+		float x3, float y3, float z3)
+		{
+			glBindTexture(GL_TEXTURE_2D, tex);
+			glBegin(GL_QUADS);
+			glTexCoord2f(0, 0); glVertex3f(x0, y0, z0);
+			glTexCoord2f(1, 0); glVertex3f(x1, y1, z1);
+			glTexCoord2f(1, 1); glVertex3f(x2, y2, z2);
+			glTexCoord2f(0, 1); glVertex3f(x3, y3, z3);
+			glEnd();
+		};
+
+	// inside-facing cube
+	face(T[0], s, -s, -s, s, -s, s, s, s, s, s, s, -s);  // +X
+	face(T[1], -s, -s, s, -s, -s, -s, -s, s, -s, -s, s, s);  // -X
+	face(T[2], -s, s, -s, s, s, -s, s, s, s, -s, s, s);  // +Y (ceiling)
+	face(T[3], -s, -s, s, s, -s, s, s, -s, -s, -s, -s, -s);  // -Y (ground-aligned bottom)
+	face(T[4], -s, -s, s, -s, s, s, s, s, s, s, -s, s);  // +Z
+	face(T[5], s, -s, -s, s, s, -s, -s, s, -s, -s, -s, -s);  // -Z
+
+	glPopMatrix();
+	glPopAttrib();
+}
+
+void drawGroundPlane(float half = 100.f, float texRepeat = 40.f) {
+	glPushAttrib(GL_ENABLE_BIT | GL_TEXTURE_BIT | GL_CURRENT_BIT);
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, gTexGrass);
+	glColor3f(1, 1, 1);
+
+	glBegin(GL_QUADS);
+	glNormal3f(0, 1, 0);
+	glTexCoord2f(0, 0);            glVertex3f(-half, 0.f, -half);
+	glTexCoord2f(texRepeat, 0);            glVertex3f(half, 0.f, -half);
+	glTexCoord2f(texRepeat, texRepeat);      glVertex3f(half, 0.f, half);
+	glTexCoord2f(0, texRepeat);      glVertex3f(-half, 0.f, half);
+	glEnd();
+
+	glPopAttrib();
+}
 
 void drawSphere(double r) {
 	const int slices = noOfSides;         // 30 by default
@@ -1051,7 +1215,6 @@ void drawUnlitSphere(float x, float y, float z, float r, float cr, float cg, flo
 
 void drawLine(const float a[3], const float b[3]) {
 	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LIGHTING_BIT);
-	glDisable(GL_LIGHTING);
 	glColor3f(1.0f, 1.0f, 1.0f);
 	glBegin(GL_LINES);
 	glVertex3f(a[0], a[1], a[2]);
@@ -1252,11 +1415,6 @@ void drawCuirass(const HumanDims& d) {
 		const float margin = 0.12f * w;         // inset from belt edges
 		const float usable = w - 2.f * margin;
 
-		glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT | GL_CURRENT_BIT | GL_POINT_BIT | GL_DEPTH_BUFFER_BIT);
-		glDisable(GL_LIGHTING);
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glEnable(GL_DEPTH_TEST);
-
 		glPointSize(5.5f);
 		glColor3f(0.08f, 0.08f, 0.08f);        // dark holes
 
@@ -1289,6 +1447,7 @@ void drawForearmBracer(const HumanDims& d) {
 	const float r0 = d.armLimbR * 1.15f;          // base radius (near elbow)
 	const float r1 = d.armLimbR * 1.10f;          // tip radius (toward wrist)
 	drawYCylinder(r0, r1, h);
+	UnbindTex();
 
 	// ---- decorative overlays: line strips + points ----
 	{
@@ -1298,7 +1457,6 @@ void drawForearmBracer(const HumanDims& d) {
 
 		// unlit, no texture, darker color
 		glPushAttrib(GL_ENABLE_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT | GL_CURRENT_BIT | GL_LINE_BIT | GL_POINT_BIT);
-		glDisable(GL_LIGHTING);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glColor3f(0.08f, 0.08f, 0.08f);
 
@@ -1307,6 +1465,8 @@ void drawForearmBracer(const HumanDims& d) {
 			return (1.0f - t) * r0 + t * r1 + lift;
 			};
 
+		useCloth();
+		UseSlot(TEX_CLOTH);
 		// ---- circumferential ring near the top ----
 		{
 			const float t = 0.2f; // 0..1 along +Y
@@ -1337,12 +1497,12 @@ void drawForearmBracer(const HumanDims& d) {
 			glEnd();
 			gPrim.linestrip += 1;
 		}
+		UnbindTex();
 
 		glPopAttrib();
 	}
 
 	glPopMatrix();
-	UnbindTex();
 }
 
 
@@ -1474,7 +1634,7 @@ void drawCenterTasset(const HumanDims& d) {
 		const float Ro = R * outlineScale;
 
 		glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LIGHTING_BIT | GL_LINE_BIT);
-		glDisable(GL_LIGHTING);
+		//glDisable(GL_LIGHTING);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glLineWidth(5.0f);
 		glColor3f(0.3f, 0.3f, 0.3f);
@@ -2166,6 +2326,7 @@ void demo() {
 		walkPhase += walkSpeed;
 		if (walkPhase > 360.f) walkPhase -= 360.f;
 
+
 		float speed = humanSpeed * (g_kShift ? 3.f : 1.0f);
 
 		// propose
@@ -2193,11 +2354,17 @@ void demo() {
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
-	// camera transform
+	// draw skybox first (uses only camera rotation)
+	drawSkyboxCube();
+
+	// now regular camera transform for the world
 	glTranslatef(-camX, -camY, -camZ);
 	glRotatef(camRotX, 1.f, 0.f, 0.f);
 	glRotatef(camRotY, 0.f, 1.f, 0.f);
 	glRotatef(camRotZ, 0.f, 0.f, 1.f);
+
+	drawGroundPlane(120.f, 60.f);   // big, nicely tiled grass
+
 
 	// --- Visible light sources ("suns") ---
 	if (showSuns) {
