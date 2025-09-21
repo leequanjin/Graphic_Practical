@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\x64\Debug\brick.bmp">
-      <Filter>Resource Files</Filter>
-    </Image>
     <Image Include="..\x64\Debug\metal.bmp">
       <Filter>Resource Files</Filter>
     </Image>
@@ -63,10 +60,23 @@
     <Image Include="grass.bmp">
       <Filter>Resource Files</Filter>
     </Image>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="assignment.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+    <Image Include="infinity.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="dark_choco.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="white_vanila.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="cone.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="shiny_red.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="tower.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
